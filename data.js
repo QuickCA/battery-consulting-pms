@@ -19,35 +19,36 @@ const ACTION_TYPES = ['Process', 'Equipment', 'Quality', 'Data', 'Training', 'SO
 const ACTION_STATUSES = ['Not Started', 'In Progress', 'Blocked', 'Pending Verification', 'Closed', 'On Hold'];
 const APPROVAL_STATUSES = ['Draft', 'Under Technical Review', 'Recommended', 'Pending Client Approval', 'Approved', 'Rejected', 'Deferred', 'Closed'];
 
-// Toolkit 01_RACI — 17 activities x 7 roles
+// Toolkit 01_RACI — 17 activities x 7 roles (Chinese source + professional EN snapshot)
 const RACI_ROLES = [
-  { key: 'tm', label: 'Technical Manager', cn: '技术经理', loc: '远程' },
-  { key: 'pm', label: 'Project Manager', cn: '项目经理', loc: '远程/现场' },
-  { key: 'wl', label: 'Workstream Leader', cn: '专业组长', loc: '现场' },
-  { key: 'ce', label: 'Consulting Engineer', cn: '咨询工程师', loc: '现场' },
-  { key: 'cpo', label: 'Client Production Owner', cn: '客户生产负责人', loc: '客户' },
-  { key: 'cqe', label: 'Client Quality / EHS / Eng.', cn: '客户质量/EHS/工程', loc: '客户' },
-  { key: 'cps', label: 'Client Project Sponsor', cn: '客户项目发起人', loc: '客户' }
+  { key: 'tm', label: '技术经理', cn: '技术经理', en: 'Technical Manager', loc: '远程', enLoc: 'Remote' },
+  { key: 'pm', label: '项目经理', cn: '项目经理', en: 'Project Manager', loc: '远程/现场', enLoc: 'Remote / On-site' },
+  { key: 'wl', label: '专业组长', cn: '专业组长', en: 'Workstream Leader', loc: '现场', enLoc: 'On-site' },
+  { key: 'ce', label: '咨询工程师', cn: '咨询工程师', en: 'Consulting Engineer', loc: '现场', enLoc: 'On-site' },
+  { key: 'cpo', label: '客户生产负责人', cn: '客户生产负责人', en: 'Client Production Owner', loc: '客户', enLoc: 'Client' },
+  { key: 'cqe', label: '客户质量/EHS/工程', cn: '客户质量/EHS/工程', en: 'Client Quality / EHS / Engineering', loc: '客户', enLoc: 'Client' },
+  { key: 'cps', label: '客户项目发起人', cn: '客户项目发起人', en: 'Client Project Sponsor', loc: '客户', enLoc: 'Client' }
 ];
 
+// [中文活动, 英文活动, ...7 个角色的 RACI 分配]
 const RACI_MATRIX = [
-  ['Project objectives, scope and success criteria', 'A', 'R', 'C', 'I', 'C', 'C', 'I'],
-  ['Daily work planning and resource coordination', 'I', 'A', 'R', 'C', 'I', 'I', 'I'],
-  ['On-site observation and data collection', 'I', 'C', 'A', 'R', 'I', 'I', 'I'],
-  ['Problem statement and evidence validation', 'C', 'I', 'A', 'R', 'C', 'C', 'I'],
-  ['Root-cause analysis', 'A', 'I', 'C', 'R', 'C', 'C', 'I'],
-  ['Improvement concept / technical recommendation', 'A', 'C', 'R', 'R', 'C', 'C', 'I'],
-  ['Technical review of cross-process / high-impact solution', 'A', 'C', 'C', 'R', 'I', 'C', 'I'],
-  ['Client approval / Management of Change', 'C', 'I', 'I', 'C', 'R', 'C', 'A'],
-  ['Production trial planning and risk assessment', 'C', 'I', 'C', 'R', 'A', 'C', 'I'],
-  ['Execution of process / equipment change', 'I', 'I', 'I', 'C', 'A', 'C', 'I'],
-  ['Production monitoring during trial', 'I', 'I', 'C', 'R', 'A', 'C', 'I'],
-  ['Result verification against baseline', 'C', 'I', 'C', 'R', 'A', 'R', 'I'],
-  ['Update SOP / control plan / parameter standard', 'C', 'I', 'I', 'C', 'A', 'R', 'I'],
-  ['Escalation of safety or critical quality risk', 'A', 'R', 'C', 'C', 'R', 'C', 'I'],
-  ['Weekly KPI and project status reporting', 'A', 'R', 'C', 'C', 'I', 'I', 'I'],
-  ['Customer steering committee and scope decisions', 'C', 'R', 'I', 'I', 'C', 'C', 'A'],
-  ['Technical decision log and knowledge capture', 'A', 'C', 'C', 'R', 'I', 'C', 'I']
+  ['项目目标、范围与成功标准', 'Project objectives, scope and success criteria', 'A', 'R', 'C', 'I', 'C', 'C', 'I'],
+  ['日常工作计划与资源协调', 'Daily work planning and resource coordination', 'I', 'A', 'R', 'C', 'I', 'I', 'I'],
+  ['现场观察与数据采集', 'On-site observation and data collection', 'I', 'C', 'A', 'R', 'I', 'I', 'I'],
+  ['问题陈述与证据验证', 'Problem statement and evidence validation', 'C', 'I', 'A', 'R', 'C', 'C', 'I'],
+  ['根因分析', 'Root-cause analysis', 'A', 'I', 'C', 'R', 'C', 'C', 'I'],
+  ['改进方案 / 技术建议', 'Improvement concept / technical recommendation', 'A', 'C', 'R', 'R', 'C', 'C', 'I'],
+  ['跨工序 / 高影响方案的技术评审', 'Technical review of cross-process / high-impact solution', 'A', 'C', 'C', 'R', 'I', 'C', 'I'],
+  ['客户审批 / 变更管理', 'Client approval / Management of Change', 'C', 'I', 'I', 'C', 'R', 'C', 'A'],
+  ['试产计划与风险评估', 'Production trial planning and risk assessment', 'C', 'I', 'C', 'R', 'A', 'C', 'I'],
+  ['工序 / 设备变更执行', 'Execution of process / equipment change', 'I', 'I', 'I', 'C', 'A', 'C', 'I'],
+  ['试产期间的生产监控', 'Production monitoring during trial', 'I', 'I', 'C', 'R', 'A', 'C', 'I'],
+  ['结果相对基线的验证', 'Result verification against baseline', 'C', 'I', 'C', 'R', 'A', 'R', 'I'],
+  ['更新 SOP / 控制计划 / 参数标准', 'Update SOP / control plan / parameter standard', 'C', 'I', 'I', 'C', 'A', 'R', 'I'],
+  ['安全或关键质量风险升级', 'Escalation of safety or critical quality risk', 'A', 'R', 'C', 'C', 'R', 'C', 'I'],
+  ['周度 KPI 与项目状态报告', 'Weekly KPI and project status reporting', 'A', 'R', 'C', 'C', 'I', 'I', 'I'],
+  ['客户指导委员会与范围决策', 'Customer steering committee and scope decisions', 'C', 'R', 'I', 'I', 'C', 'C', 'A'],
+  ['技术决策日志与知识沉淀', 'Technical decision log and knowledge capture', 'A', 'C', 'C', 'R', 'I', 'C', 'I']
 ];
 const TEAM = [
   { id: 'T01', name: '技术经理', en: 'Technical Manager', area: '治理 / 决策', role: 'Accountable', site: '远程', count: 1, duty: '技术治理、闸门审批、L2/L3升级、周评审主持' },

@@ -264,6 +264,7 @@ const I18N_DICT = {
   '负责实施，完成后提交验证结果与客户签署。': 'responsible for implementation; submit verification results and client sign-off upon completion.',
   '项关键活动': 'key activities',
   '类角色 · 每个活动只有一个 A（Accountable）': 'roles · each activity has exactly one A (Accountable)',
+  '17 项关键活动 × 7 类角色 · 每个活动只有一个 A（最终负责）': '17 key activities × 7 role categories · exactly one A (Accountable) per activity',
   '咨询团队总人数': 'Consulting team headcount',
   '现场': 'On-site',
   '远程/双地': 'Remote / Dual-site',

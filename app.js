@@ -720,25 +720,27 @@ function openDecision(id) {
 }
 
 /* ---------------- page: team ---------------- */
+const RACI_ROLE_CN = { Accountable: '最终负责', Responsible: '执行', Consulted: '被咨询', Informed: '被告知' };
+const raciRoleCn = (v) => RACI_ROLE_CN[v] || v;
 function renderTeam() {
   const byArea = {};
   TEAM.forEach(t => { byArea[t.area] = (byArea[t.area] || 0) + t.count; });
   return `
-  <div class="page-head"><div><h1>团队与 RACI</h1><p>17 项关键活动 × 7 类角色 · 每个活动只有一个 A（Accountable）</p></div></div>
+  <div class="page-head"><div><h1>团队与 RACI</h1><p>17 项关键活动 × 7 类角色 · 每个活动只有一个 A（最终负责）</p></div></div>
   <div class="grid grid-kpi" style="margin-bottom:18px">
     <div class="card kpi"><div class="kpi-label">咨询团队总人数</div><div class="kpi-value">${TEAM.reduce((a, b) => a + b.count, 0)}</div><div class="kpi-foot">现场 ${TEAM.filter(t => t.site === '现场').reduce((a, b) => a + b.count, 0)} · 远程/双地 ${TEAM.filter(t => t.site !== '现场').reduce((a, b) => a + b.count, 0)}</div></div>
-    <div class="card kpi teal"><div class="kpi-label">技术经理为 A 的活动</div><div class="kpi-value">${RACI_MATRIX.filter(r => r[1] === 'A').length}</div><div class="kpi-foot">共 ${RACI_MATRIX.length} 项活动</div></div>
+    <div class="card kpi teal"><div class="kpi-label">技术经理为 A 的活动</div><div class="kpi-value">${RACI_MATRIX.filter(r => r[2] === 'A').length}</div><div class="kpi-foot">共 ${RACI_MATRIX.length} 项活动</div></div>
     <div class="card kpi purple"><div class="kpi-label">客户侧角色</div><div class="kpi-value">3</div><div class="kpi-foot">生产 / 质量EHS工程 / 发起人</div></div>
   </div>
   <div class="grid grid-3" style="margin-bottom:18px">
-    ${TEAM.map(t => `<div class="team-card"><div class="t-top"><div class="avatar" style="background:var(--primary-soft);color:var(--primary)">${esc(avatarInitial(t))}</div><div><div class="t-name">${esc(t.name)} ×${t.count}</div><div class="t-role">${esc(t.en)}</div></div></div><div class="t-tags"><span class="tag blue">${esc(t.area)}</span><span class="tag teal">${esc(t.site)}</span><span class="tag purple">${esc(t.role)}</span></div><div class="small" style="margin-top:9px;line-height:1.6">${esc(t.duty)}</div></div>`).join('')}
+    ${TEAM.map(t => `<div class="team-card"><div class="t-top"><div class="avatar" style="background:var(--primary-soft);color:var(--primary)">${esc(avatarInitial(t))}</div><div><div class="t-name">${esc(t.name)} ×${t.count}</div><div class="t-role">${esc(isEn() ? t.en : raciRoleCn(t.role))}</div></div></div><div class="t-tags"><span class="tag blue">${esc(t.area)}</span><span class="tag teal">${esc(t.site)}</span><span class="tag purple">${esc(isEn() ? t.role : raciRoleCn(t.role))}</span></div><div class="small" style="margin-top:9px;line-height:1.6">${esc(t.duty)}</div></div>`).join('')}
   </div>
   <div class="card">
     <div class="card-head"><div><h3 class="card-title">RACI 责任矩阵</h3><div class="card-sub">源自工具包 01_RACI · A=最终负责 R=执行 C=被咨询 I=被告知</div></div></div>
-    <div class="table-wrap"><table class="tbl matrix"><thead><tr><th style="min-width:280px">Activity / Deliverable</th>${RACI_ROLES.map(r => `<th style="text-align:center">${esc(disp(r,'cn'))}<small>${esc(disp(r,'label'))} · ${esc(disp(r,'loc'))}</small></th>`).join('')}</tr></thead><tbody>
-    ${RACI_MATRIX.map(row => `<tr><td class="titlecell">${esc(row[0])}</td>${row.slice(1).map(v => `<td class="r ${v.toLowerCase()}">${v}</td>`).join('')}</tr>`).join('')}
+    <div class="table-wrap"><table class="tbl matrix"><thead><tr><th style="min-width:280px">${isEn() ? 'Activity / Deliverable' : '活动 / 交付物'}</th>${RACI_ROLES.map(r => `<th style="text-align:center">${esc(isEn() ? r.en : r.label)}<small>${esc(isEn() ? r.enLoc : r.loc)}</small></th>`).join('')}</tr></thead><tbody>
+    ${RACI_MATRIX.map(row => `<tr><td class="titlecell">${esc(isEn() ? row[1] : row[0])}</td>${row.slice(2).map(v => `<td class="r ${v.toLowerCase()}">${v}</td>`).join('')}</tr>`).join('')}
     </tbody></table></div>
-    <div class="card-body"><div class="legend"><span><b class="r a">A</b> Accountable 最终负责</span><span><b class="r r">R</b> Responsible 执行</span><span><b class="r c">C</b> Consulted 咨询</span><span><b class="r i">I</b> Informed 知会</span></div>
+    <div class="card-body"><div class="legend"><span><b class="r a">A</b> ${isEn() ? 'Accountable' : '最终负责'}</span><span><b class="r r">R</b> ${isEn() ? 'Responsible' : '执行'}</span><span><b class="r c">C</b> ${isEn() ? 'Consulted' : '被咨询'}</span><span><b class="r i">I</b> ${isEn() ? 'Informed' : '被告知'}</span></div>
     </div>
   </div>`;
 }
@@ -827,12 +829,12 @@ function renderKnowledge() {
 /* ---------------- page: data ---------------- */
 function renderData() {
   const map = [
-    ['01_RACI', 'RACI Matrix（17 活动 × 7 角色）', '团队与 RACI'],
-    ['02_Daily Report', 'Daily Activity Report（11 字段）', '每日跟线报告'],
-    ['03_Issue Log', 'Technical Issue Log（19 字段）', '技术问题台账'],
-    ['04_Action Tracker', 'Improvement Action Tracker（17 字段）', '改进行动跟踪'],
-    ['05_Decision Log', 'Technical Decision Log（16 字段）', '技术决策日志'],
-    ['06_KPI Dashboard', 'Project KPI Dashboard（12 KPI）', 'KPI 看板']
+    ['01_RACI', isEn() ? 'RACI Matrix (17 activities × 7 roles)' : 'RACI 责任矩阵（17 项活动 × 7 类角色）', '团队与 RACI'],
+    ['02_Daily Report', isEn() ? 'Daily Activity Report (11 fields)' : '每日跟线报告（11 字段）', '每日跟线报告'],
+    ['03_Issue Log', isEn() ? 'Technical Issue Log (19 fields)' : '技术问题台账（19 字段）', '技术问题台账'],
+    ['04_Action Tracker', isEn() ? 'Improvement Action Tracker (17 fields)' : '改进行动跟踪（17 字段）', '改进行动跟踪'],
+    ['05_Decision Log', isEn() ? 'Technical Decision Log (16 fields)' : '技术决策日志（16 字段）', '技术决策日志'],
+    ['06_KPI Dashboard', isEn() ? 'Project KPI Dashboard (12 KPIs)' : '项目 KPI 看板（12 项）', 'KPI 看板']
   ];
   return `
   <div class="page-head"><div><h1>数据管理</h1><p>单一数据源 · 所有模块共用同一份数据，修改后自动保存到本机浏览器</p></div></div>
