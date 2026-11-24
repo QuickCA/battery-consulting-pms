@@ -47,12 +47,26 @@ function migrateWorkstreams(db) {
   });
   return db;
 }
+/* Refresh canonical KPI metadata by id while preserving user-entered figures.
+   Older local storage still holds the English-only KPI source. */
+function migrateKpis(db) {
+  if (!Array.isArray(db.kpis)) { db.kpis = JSON.parse(JSON.stringify(KPI_DEFS)); return db; }
+  const keys = ['cat', 'name', 'enName', 'def', 'enDef', 'unit', 'enUnit', 'owner', 'enOwner'];
+  db.kpis.forEach(k => {
+    const def = KPI_DEFS.find(x => String(x.id) === String(k.id));
+    if (def) keys.forEach(key => { k[key] = def[key]; });
+    ['baseline', 'target', 'actual'].forEach(key => {
+      if (k[key] == null) k[key] = '';
+    });
+  });
+  return db;
+}
 function loadDB() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.issues && parsed.actions) return migrateWorkstreams(parsed);
+      if (parsed && parsed.issues && parsed.actions) return migrateKpis(migrateWorkstreams(parsed));
     }
   } catch (e) { /* fall through to seed */ }
   return seedDB();
@@ -362,7 +376,7 @@ function metrics() {
   const cycles = issues.filter(i => i.closureEvidenceResult && (i.status === 'Closed' || i.status === 'Verification'))
     .map(i => diffDays(i.lastUpdate, i.dateRaised)).filter(n => n > 0);
   const avgCycle = cycles.length ? (cycles.reduce((a, b) => a + b, 0) / cycles.length).toFixed(1) : '—';
-  const fpy = DB.kpis.find(k => k.name === 'FPY');
+  const fpy = DB.kpis.find(k => String(k.id) === '4' || k.enName === 'FPY' || k.name === 'FPY');
   const numeric = v => v !== '' && v != null && !isNaN(Number(v));
   const fpyGain = fpy && numeric(fpy.actual) && numeric(fpy.baseline)
     ? (Number(fpy.actual) - Number(fpy.baseline)).toFixed(1) : null;
@@ -398,11 +412,11 @@ function renderDashboard() {
     <div class="actions"><button class="btn" data-go="intake">智能录入</button><button class="btn" data-go="weekly">生成周报</button></div></div>
 
   <div class="grid grid-kpi" style="margin-bottom:18px">
-    <div class="card kpi"><div class="kpi-label">开放问题 Open Issues</div><div class="kpi-value">${m.open.length}<small> / ${DB.issues.length}</small></div><div class="kpi-foot">Critical / High <b style="color:var(--danger)">${m.ch.length}</b> 项</div></div>
-    <div class="card kpi danger"><div class="kpi-label">超期客户行动 Overdue</div><div class="kpi-value">${m.overdueActions.length}</div><div class="kpi-foot">需技术经理介入升级</div></div>
-    <div class="card kpi teal"><div class="kpi-label">关闭率 Closure Rate</div><div class="kpi-value">${m.closureRate}<small>%</small></div><div class="kpi-foot">仅计有验证证据的关闭</div></div>
-    <div class="card kpi purple"><div class="kpi-label">平均闭环周期</div><div class="kpi-value">${m.avgCycle}<small> 天</small></div><div class="kpi-foot">发现 → 验证签署</div></div>
-    <div class="card kpi warn"><div class="kpi-label">FPY 改善</div><div class="kpi-value">${m.fpyGain === null ? '—' : (m.fpyGain >= 0 ? '+' : '') + m.fpyGain}<small> pp</small></div><div class="kpi-foot">${m.fpy && m.fpy.baseline !== '' ? '基线 ' + esc(m.fpy.baseline) + '% → 当前 ' + esc(m.fpy.actual || '—') + '%' : '待客户提供基线 / 当前值'}</div></div>
+    <div class="card kpi"><div class="kpi-label">${isEn() ? 'Open Issues' : '开放问题'}</div><div class="kpi-value">${m.open.length}<small> / ${DB.issues.length}</small></div><div class="kpi-foot">${isEn() ? 'Critical / High' : '关键 / 高优先级'} <b style="color:var(--danger)">${m.ch.length}</b> ${isEn() ? '' : '项'}</div></div>
+    <div class="card kpi danger"><div class="kpi-label">${isEn() ? 'Overdue Client Actions' : '超期客户行动'}</div><div class="kpi-value">${m.overdueActions.length}</div><div class="kpi-foot">${isEn() ? 'Escalate to technical manager' : '需技术经理介入升级'}</div></div>
+    <div class="card kpi teal"><div class="kpi-label">${isEn() ? 'Closure Rate' : '关闭率'}</div><div class="kpi-value">${m.closureRate}<small>%</small></div><div class="kpi-foot">${isEn() ? 'Verified closures only' : '仅计有验证证据的关闭'}</div></div>
+    <div class="card kpi purple"><div class="kpi-label">${isEn() ? 'Average Closure Cycle' : '平均闭环周期'}</div><div class="kpi-value">${m.avgCycle}<small> ${isEn() ? 'days' : '天'}</small></div><div class="kpi-foot">${isEn() ? 'Raised → verification sign-off' : '发现 → 验证签署'}</div></div>
+    <div class="card kpi warn"><div class="kpi-label">${isEn() ? 'FPY Gain' : 'FPY 改善'}</div><div class="kpi-value">${m.fpyGain === null ? '—' : (m.fpyGain >= 0 ? '+' : '') + m.fpyGain}<small> pp</small></div><div class="kpi-foot">${m.fpy && m.fpy.baseline !== '' ? (isEn() ? 'Baseline ' : '基线 ') + esc(m.fpy.baseline) + '% ' + (isEn() ? '→ Current ' : '→ 当前 ') + esc(m.fpy.actual || '—') + '%' : (isEn() ? 'Awaiting baseline / current value' : '待客户提供基线 / 当前值')}</div></div>
   </div>
 
   <div class="grid grid-32" style="margin-bottom:18px">
@@ -441,12 +455,13 @@ function renderDashboard() {
       </tbody></table></div>
     </div>
     <div class="card">
-      <div class="card-head"><div><h3 class="card-title">关键 KPI 快照</h3><div class="card-sub">Baseline / Target / Actual — 数据由客户提供</div></div><div class="right"><button class="btn btn-sm" data-go="kpi">全部 KPI</button></div></div>
+      <div class="card-head"><div><h3 class="card-title">${isEn() ? 'Key KPI Snapshot' : '关键 KPI 快照'}</h3><div class="card-sub">${isEn() ? 'Baseline / Target / Actual — provided by the client' : '基线 / 目标 / 实际值 — 数据由客户提供'}</div></div><div class="right"><button class="btn btn-sm" data-go="kpi">${isEn() ? 'All KPIs' : '全部 KPI'}</button></div></div>
       <div class="card-body">${DB.kpis.filter(k => [1, 2, 4, 5, 6].includes(k.id)).map(k => {
         const num = v => v !== '' && v != null && !isNaN(Number(v));
         const has = num(k.baseline) && num(k.target) && num(k.actual);
         const p = has && +k.target !== +k.baseline ? Math.min(100, Math.max(0, Math.round((+k.actual - +k.baseline) / (+k.target - +k.baseline) * 100))) : 0;
-        return `<div style="margin-bottom:13px"><div style="display:flex;font-size:12px;margin-bottom:5px"><b>${esc(k.name)}</b><span style="margin-left:auto" class="mono">${has ? esc(k.actual) + esc(k.unit === '%' ? '%' : '') + ' <span class="small">/ 目标 ' + esc(k.target) + '</span>' : '<span class="small">待录入</span>'}</span></div><div class="progress"><div style="width:${p}%;background:${p >= 100 ? 'var(--success)' : 'var(--primary)'}"></div></div></div>`;
+        const unit = isEn() ? k.enUnit : k.unit;
+        return `<div style="margin-bottom:13px"><div style="display:flex;font-size:12px;margin-bottom:5px"><b>${esc(isEn() ? k.enName : k.name)}</b><span style="margin-left:auto" class="mono">${has ? esc(k.actual) + esc(unit === '%' ? '%' : '') + ' <span class="small">/ ' + (isEn() ? 'Target' : '目标') + ' ' + esc(k.target) + '</span>' : '<span class="small">' + (isEn() ? 'Pending' : '待录入') + '</span>'}</span></div><div class="progress"><div style="width:${p}%;background:${p >= 100 ? 'var(--success)' : 'var(--primary)'}"></div></div></div>`;
       }).join('')}</div>
     </div>
   </div>`;
@@ -747,16 +762,16 @@ function renderTeam() {
 
 /* ---------------- page: kpi ---------------- */
 function renderKpi() {
-  const cats = ['Production', 'Quality', 'Improvement', 'Project'];
+  const t = (zh, en) => isEn() ? en : zh;
   return `
-  <div class="page-head"><div><h1>KPI 看板</h1><p>Project KPI Dashboard · 口径来自工具包 06_KPI Dashboard；Baseline / Target / Actual 可直接填写客户真实数据</p></div></div>
-  ${cats.map(c => `<div class="card" style="margin-bottom:16px"><div class="card-head"><div><h3 class="card-title">${esc(c)}</h3></div></div><div class="table-wrap"><table class="tbl"><thead><tr><th>KPI</th><th>Definition / 计算口径</th><th>单位</th><th>Baseline</th><th>Target</th><th>Actual</th><th>达成度</th><th>Data Owner</th></tr></thead><tbody>
-    ${DB.kpis.filter(k => k.cat === c).map(k => {
+  <div class="page-head"><div><h1>${t('KPI 看板', 'KPI Dashboard')}</h1><p>${t('项目 KPI 看板 · 口径来自工具包 06_KPI Dashboard；基线 / 目标 / 实际值可直接填写客户真实数据', 'Project KPI Dashboard · definitions from toolkit 06_KPI Dashboard; baseline / target / actual can be filled with actual client data')}</p></div></div>
+  ${KPI_CATS.map(c => `<div class="card" style="margin-bottom:16px"><div class="card-head"><div><h3 class="card-title">${esc(t(c.zh, c.en))}</h3></div></div><div class="table-wrap"><table class="tbl"><thead><tr><th>${t('KPI 指标', 'KPI')}</th><th>${t('定义 / 计算口径', 'Definition')}</th><th>${t('单位', 'Unit')}</th><th>${t('基线', 'Baseline')}</th><th>${t('目标', 'Target')}</th><th>${t('实际值', 'Actual')}</th><th>${t('达成度', 'Attainment')}</th><th>${t('数据责任人', 'Data Owner')}</th></tr></thead><tbody>
+    ${DB.kpis.filter(k => k.cat === c.key).map(k => {
       const num = v => v !== '' && v != null && !isNaN(Number(v));
       const has = num(k.baseline) && num(k.target) && num(k.actual);
       const prog = has && +k.target !== +k.baseline ? Math.min(100, Math.max(0, Math.round((+k.actual - +k.baseline) / (+k.target - +k.baseline) * 100))) : null;
       const cell = key => `<input class="cell-input" type="number" step="any" data-kpi-id="${k.id}" data-kpi-key="${key}" value="${esc(k[key])}" placeholder="—">`;
-      return `<tr><td class="titlecell">${esc(k.name)}</td><td class="small">${esc(k.def)}</td><td class="small">${esc(k.unit)}</td><td>${cell('baseline')}</td><td>${cell('target')}</td><td>${cell('actual')}</td><td><div style="display:flex;align-items:center;gap:7px"><div class="progress" style="width:70px"><div style="width:${prog == null ? 0 : prog}%;background:${prog != null && prog >= 100 ? 'var(--success)' : 'var(--primary)'}"></div></div><span class="small">${prog == null ? '待录入' : prog + '%'}</span></div></td><td class="small">${esc(k.owner)}</td></tr>`;
+      return `<tr><td class="titlecell">${esc(t(k.name, k.enName))}</td><td class="small">${esc(t(k.def, k.enDef))}</td><td class="small">${esc(t(k.unit, k.enUnit))}</td><td>${cell('baseline')}</td><td>${cell('target')}</td><td>${cell('actual')}</td><td><div style="display:flex;align-items:center;gap:7px"><div class="progress" style="width:70px"><div style="width:${prog == null ? 0 : prog}%;background:${prog != null && prog >= 100 ? 'var(--success)' : 'var(--primary)'}"></div></div><span class="small">${prog == null ? t('待录入', 'Pending') : prog + '%'}</span></div></td><td class="small">${esc(t(k.owner, k.enOwner))}</td></tr>`;
     }).join('')}
   </tbody></table></div></div>`).join('')}`;
 }

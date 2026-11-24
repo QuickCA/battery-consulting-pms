@@ -81,21 +81,29 @@ const CLIENT_OWNERS = [
   '客户设备负责人', '客户 EHS 负责人', '客户项目发起人'
 ];
 
-// 06_KPI Dashboard — 12 KPI definitions from the toolkit.
+// 06_KPI Dashboard — 12 KPI definitions mapped 1:1 from the toolkit.
+// Chinese source + professional EN snapshot; `cat` stays a stable grouping key.
 // Baseline / Target / Actual are intentionally blank: enter the client's real figures.
+const KPI_CATS = [
+  { key: 'Production', zh: '生产', en: 'Production' },
+  { key: 'Quality', zh: '质量', en: 'Quality' },
+  { key: 'Improvement', zh: '改进', en: 'Improvement' },
+  { key: 'Project', zh: '项目', en: 'Project' }
+];
+
 const KPI_DEFS = [
-  { id: 1, cat: 'Production', name: 'Daily Output', def: 'Good cells produced per day', unit: 'cells/day', owner: 'Client Production', baseline: '', target: '', actual: '' },
-  { id: 2, cat: 'Production', name: 'OEE', def: 'Availability × Performance × Quality; use site definition', unit: '%', owner: 'Client Production', baseline: '', target: '', actual: '' },
-  { id: 3, cat: 'Production', name: 'Unplanned Downtime', def: 'Unplanned downtime during reporting period', unit: 'hours', owner: 'Client Equipment', baseline: '', target: '', actual: '' },
-  { id: 4, cat: 'Quality', name: 'FPY', def: 'First-pass accepted units / total units processed', unit: '%', owner: 'Client Quality', baseline: '', target: '', actual: '' },
-  { id: 5, cat: 'Quality', name: 'Scrap Rate', def: 'Scrapped units / total units processed', unit: '%', owner: 'Client Quality', baseline: '', target: '', actual: '' },
-  { id: 6, cat: 'Quality', name: 'Critical Defect Rate', def: 'Critical defects / total units inspected', unit: '%', owner: 'Client Quality', baseline: '', target: '', actual: '' },
-  { id: 7, cat: 'Improvement', name: 'Actions Due', def: 'Number of actions with due date in reporting period', unit: 'count', owner: 'PM', baseline: '', target: '', actual: '' },
-  { id: 8, cat: 'Improvement', name: 'Actions Closed & Verified', def: 'Actions closed with verification evidence', unit: 'count', owner: 'PM', baseline: '', target: '', actual: '' },
-  { id: 9, cat: 'Improvement', name: 'Action Closure Rate', def: 'Closed & verified actions / actions due', unit: '%', owner: 'PM', baseline: '', target: '', actual: '' },
-  { id: 10, cat: 'Improvement', name: 'Overdue Actions', def: 'Open actions past due date', unit: 'count', owner: 'PM', baseline: '', target: '', actual: '' },
-  { id: 11, cat: 'Project', name: 'Milestone Achievement', def: 'Milestones completed on or before plan / milestones due', unit: '%', owner: 'PM', baseline: '', target: '', actual: '' },
-  { id: 12, cat: 'Project', name: 'Open Critical / High Issues', def: 'Open critical and high priority issues', unit: 'count', owner: 'PM', baseline: '', target: '', actual: '' }
+  { id: 1, cat: 'Production', name: '日合格产出', enName: 'Daily Output', def: '当日生产并检验合格的电芯数量', enDef: 'Good cells produced per day', unit: '电芯/天', enUnit: 'cells/day', owner: '客户生产', enOwner: 'Client Production', baseline: '', target: '', actual: '' },
+  { id: 2, cat: 'Production', name: '设备综合效率 OEE', enName: 'OEE', def: '时间开动率 × 性能开动率 × 良品率；采用现场定义', enDef: 'Availability × Performance × Quality; use site definition', unit: '%', enUnit: '%', owner: '客户生产', enOwner: 'Client Production', baseline: '', target: '', actual: '' },
+  { id: 3, cat: 'Production', name: '非计划停机', enName: 'Unplanned Downtime', def: '报告周期内的非计划停机时长', enDef: 'Unplanned downtime during reporting period', unit: '小时', enUnit: 'hours', owner: '客户设备', enOwner: 'Client Equipment', baseline: '', target: '', actual: '' },
+  { id: 4, cat: 'Quality', name: '首次通过率 FPY', enName: 'FPY', def: '一次检验合格数 / 总加工数', enDef: 'First-pass accepted units / total units processed', unit: '%', enUnit: '%', owner: '客户质量', enOwner: 'Client Quality', baseline: '', target: '', actual: '' },
+  { id: 5, cat: 'Quality', name: '报废率', enName: 'Scrap Rate', def: '报废数 / 总加工数', enDef: 'Scrapped units / total units processed', unit: '%', enUnit: '%', owner: '客户质量', enOwner: 'Client Quality', baseline: '', target: '', actual: '' },
+  { id: 6, cat: 'Quality', name: '关键缺陷率', enName: 'Critical Defect Rate', def: '关键缺陷数 / 总检验数', enDef: 'Critical defects / total units inspected', unit: '%', enUnit: '%', owner: '客户质量', enOwner: 'Client Quality', baseline: '', target: '', actual: '' },
+  { id: 7, cat: 'Improvement', name: '到期行动数', enName: 'Actions Due', def: '到期日落在本报告周期内的行动数量', enDef: 'Number of actions with due date in reporting period', unit: '项', enUnit: 'count', owner: '项目经理', enOwner: 'PM', baseline: '', target: '', actual: '' },
+  { id: 8, cat: 'Improvement', name: '关闭并验证行动数', enName: 'Actions Closed & Verified', def: '具备验证证据的已关闭行动数量', enDef: 'Actions closed with verification evidence', unit: '项', enUnit: 'count', owner: '项目经理', enOwner: 'PM', baseline: '', target: '', actual: '' },
+  { id: 9, cat: 'Improvement', name: '行动关闭率', enName: 'Action Closure Rate', def: '已关闭并验证行动数 / 到期行动数', enDef: 'Closed & verified actions / actions due', unit: '%', enUnit: '%', owner: '项目经理', enOwner: 'PM', baseline: '', target: '', actual: '' },
+  { id: 10, cat: 'Improvement', name: '超期行动', enName: 'Overdue Actions', def: '超过到期日仍未关闭的行动数量', enDef: 'Open actions past due date', unit: '项', enUnit: 'count', owner: '项目经理', enOwner: 'PM', baseline: '', target: '', actual: '' },
+  { id: 11, cat: 'Project', name: '里程碑达成率', enName: 'Milestone Achievement', def: '按计划或提前完成的里程碑数 / 应完成里程碑数', enDef: 'Milestones completed on or before plan / milestones due', unit: '%', enUnit: '%', owner: '项目经理', enOwner: 'PM', baseline: '', target: '', actual: '' },
+  { id: 12, cat: 'Project', name: '未关闭关键/高优先级问题', enName: 'Open Critical / High Issues', def: '处于未关闭状态的关键及高优先级问题数量', enDef: 'Open critical and high priority issues', unit: '项', enUnit: 'count', owner: '项目经理', enOwner: 'PM', baseline: '', target: '', actual: '' }
 ];
 
 const TODAY = (() => {
