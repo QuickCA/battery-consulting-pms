@@ -188,6 +188,13 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .tbl td { padding: 11px 13px; border-bottom: 1px solid #eef1f5; vertical-align: middle; }
 .tbl tbody tr:last-child td { border-bottom: none; }
 .tbl tbody tr:hover { background: #fafcff; }
+/* Escalated (urgent) ledger rows / cards — full red highlight */
+.tbl tbody tr.row-urgent { background: var(--danger-soft); }
+.tbl tbody tr.row-urgent:hover { background: #fbd9d5; }
+.tbl tbody tr.row-urgent td { border-bottom-color: #f4c4bf; }
+.card.row-urgent { background: var(--danger-soft); border-color: #f0b4ae; }
+.card.row-urgent .card-head { background: rgba(217, 45, 32, .04); }
+.urgent-flag { display: inline-block; vertical-align: middle; background: var(--danger); color: #fff; font-size: 9.5px; font-weight: 800; letter-spacing: .4px; padding: 1px 5px; border-radius: 4px; margin-left: 3px; }
 .tbl .idcell { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--primary); font-size: 11.5px; font-weight: 600; }
 .tbl .titlecell { font-weight: 650; color: var(--text); max-width: 300px; }
 .tbl .sub { font-size: 11px; color: var(--muted); margin-top: 1px; }

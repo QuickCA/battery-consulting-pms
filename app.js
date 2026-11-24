@@ -115,6 +115,24 @@ function statusLabel(v) {
   return (!isEn() && STATUS_CN[v]) ? STATUS_CN[v] : v;
 }
 
+/* ---------------- row-level ledger actions ----------------
+   Urgent entries are pinned first and highlighted across all ledgers.
+   `_urgent` is a system flag (like `_en`), persisted in localStorage only. */
+function pinUrgent(list) {
+  const hot = list.filter(x => x && x._urgent);
+  const rest = list.filter(x => !(x && x._urgent));
+  return hot.concat(rest);
+}
+const LEDGER_ID_KEY = { issues: 'issueId', actions: 'actionId', decisions: 'decisionId' };
+function rowBtns(kind, item) {
+  const idx = DB[kind].indexOf(item);
+  const urgent = !!item._urgent;
+  const del = isEn() ? 'Delete' : '删除';
+  const urg = urgent ? (isEn() ? 'Unflag' : '取消升级')
+                     : (isEn() ? 'Escalate' : '紧急升级');
+  return `<button class="btn btn-xs ${urgent ? 'btn-danger' : ''}" data-row-act="urgent" data-kind="${kind}" data-idx="${idx}" title="${urg}">${urg}</button><button class="btn btn-xs btn-danger" data-row-act="del" data-kind="${kind}" data-idx="${idx}" title="${del}">${del}</button>`;
+}
+
 /* Render the four-section technical problem statement into visually separated
    blocks. Sections are detected by their leading labels (Chinese or English);
    numbered lines are kept on their own line. Falls back to plain nl2br for
@@ -500,6 +518,7 @@ function renderIssues() {
     }
     return true;
   });
+  const shown = pinUrgent(list);
   return `
   <div class="page-head"><div><h1>技术问题台账</h1><p>Technical Issue Log · 一个问题一行，从发现到关闭全程留痕（工具包 03_Issue Log）</p></div>
     <div class="actions"><button class="btn" id="btnNewAction">+ 改进行动</button><button class="btn btn-primary" id="btnNewIssue2">+ 新建问题</button></div></div>
@@ -511,10 +530,10 @@ function renderIssues() {
     <div class="spacer"></div><div class="count">显示 ${list.length} / ${DB.issues.length} 项</div>
   </div>
   <div class="card"><div class="table-wrap"><table class="tbl"><thead><tr>
-    <th>Issue ID</th><th>问题陈述 / 工序</th><th>影响</th><th>优先级</th><th>状态</th><th>我方负责人</th><th>客户执行人</th><th>目标日</th><th>升级</th><th></th>
+    <th>Issue ID</th><th>问题陈述 / 工序</th><th>影响</th><th>优先级</th><th>状态</th><th>我方负责人</th><th>客户执行人</th><th>目标日</th><th>升级</th><th>${isEn() ? 'Actions' : '操作'}</th>
   </tr></thead><tbody>
-  ${list.map(i => `<tr data-issue="${esc(disp(i,'issueId'))}" style="cursor:pointer">
-    <td class="idcell">${esc(disp(i,'issueId'))}</td>
+  ${shown.map(i => `<tr data-issue="${esc(disp(i,'issueId'))}" class="${i._urgent ? 'row-urgent' : ''}" style="cursor:pointer">
+    <td class="idcell">${esc(disp(i,'issueId'))}${i._urgent ? ' <span class="urgent-flag">' + (isEn() ? 'URGENT' : '紧急') + '</span>' : ''}</td>
     <td><div class="titlecell">${esc(disp(i,'problemStatement').slice(0, 58))}${i.problemStatement.length > 58 ? '…' : ''}</div><div class="sub">${esc(disp(i,'processEquipment'))}</div></td>
     <td class="small">${esc(disp(i,'impactArea'))}</td>
     <td>${pillPriority(i.priority)}</td>
@@ -523,7 +542,7 @@ function renderIssues() {
     <td class="small">${esc(disp(i,'clientActionOwner'))}</td>
     <td class="${dueClass(i.targetDate, i.status)} small">${esc(disp(i,'targetDate'))}${isOverdueIssue(i) ? ' ⚠' : ''}</td>
     <td>${pillEsc(i.escalationLevel)}</td>
-    <td><button class="btn btn-xs" data-open="${esc(disp(i,'issueId'))}">详情</button></td>
+    <td><button class="btn btn-xs" data-open="${esc(disp(i,'issueId'))}">${isEn() ? 'Details' : '详情'}</button> ${rowBtns('issues', i)}</td>
   </tr>`).join('') || `<tr><td colspan="10">${empty('没有符合条件的问题')}</td></tr>`}
   </tbody></table></div></div>`;
 }
@@ -602,6 +621,7 @@ function renderActions() {
     }
     return true;
   }).sort((a, b) => overdue(b) - overdue(a) || a.dueDate.localeCompare(b.dueDate));
+  const shown = pinUrgent(list);
   return `
   <div class="page-head"><div><h1>改进行动跟踪</h1><p>Improvement Action Tracker · 客户拥有执行责任，我方提供支持与验证（工具包 04_Action Tracker）</p></div>
     <div class="actions"><button class="btn ${actionFilter.over ? 'btn-primary' : ''}" id="btnOverdue">仅看超期</button><button class="btn btn-primary" id="btnNewAction2">+ 新建行动</button></div></div>
@@ -617,10 +637,10 @@ function renderActions() {
     <div class="spacer"></div><div class="count">显示 ${list.length} / ${DB.actions.length} 项</div>
   </div>
   <div class="card"><div class="table-wrap"><table class="tbl"><thead><tr>
-    <th>Action ID</th><th>改进行动 / 验收标准</th><th>关联问题</th><th>客户执行人</th><th>到期日</th><th>状态</th><th>完成度</th><th>超期</th><th>验证</th><th></th>
+    <th>Action ID</th><th>改进行动 / 验收标准</th><th>关联问题</th><th>客户执行人</th><th>到期日</th><th>状态</th><th>完成度</th><th>超期</th><th>验证</th><th>${isEn() ? 'Actions' : '操作'}</th>
   </tr></thead><tbody>
-  ${list.map(a => `<tr>
-    <td class="idcell">${esc(disp(a,'actionId'))}</td>
+  ${shown.map(a => `<tr class="${a._urgent ? 'row-urgent' : ''}">
+    <td class="idcell">${esc(disp(a,'actionId'))}${a._urgent ? ' <span class="urgent-flag">' + (isEn() ? 'URGENT' : '紧急') + '</span>' : ''}</td>
     <td><div class="titlecell" style="max-width:280px">${esc(disp(a,'improvementAction').slice(0, 52))}${a.improvementAction.length > 52 ? '…' : ''}</div><div class="sub">${esc(disp(a,'expectedOutcomeAcceptanceCriteria').slice(0, 46))}…</div></td>
     <td><span class="tag blue mono">${esc(disp(a,'linkedIssueId'))}</span></td>
     <td class="small">${esc(disp(a,'clientActionOwner'))}</td>
@@ -629,7 +649,7 @@ function renderActions() {
     <td><div style="display:flex;align-items:center;gap:6px"><div class="progress" style="width:52px"><div style="width:${+a.percentComplete || 0}%"></div></div><span class="small">${esc(disp(a,'percentComplete'))}%</span></div></td>
     <td class="${overdue(a) ? 'due-over' : ''}">${overdue(a) ? overdue(a) + ' d' : '—'}</td>
     <td class="small">${a.verificationResultEvidence ? '<span class="tag teal">有证据</span>' : '<span class="tag">待验证</span>'}</td>
-    <td><button class="btn btn-xs" data-open="${esc(disp(a,'actionId'))}">详情</button></td>
+    <td><button class="btn btn-xs" data-open="${esc(disp(a,'actionId'))}">${isEn() ? 'Details' : '详情'}</button> ${rowBtns('actions', a)}</td>
   </tr>`).join('') || `<tr><td colspan="10">${empty('没有符合条件的行动')}</td></tr>`}
   </tbody></table></div></div>`;
 }
@@ -688,13 +708,14 @@ function openAction(id) {
 let reportFilter = '';
 function renderReports() {
   const list = DB.reports.filter(r => !reportFilter || r.workstream === reportFilter);
+  const shown = pinUrgent(list);
   return `
   <div class="page-head"><div><h1>每日跟线报告</h1><p>Daily Activity Report · 每个专业组每天一份，只记录事实与证据（工具包 02_Daily Report）</p></div>
     <div class="actions"><button class="btn btn-primary" id="btnNewReport">+ 提交日报</button></div></div>
   <div class="filterbar"><select id="fws"><option value="">全部专业组</option>${opts(WORKSTREAMS, reportFilter)}</select><div class="spacer"></div><div class="count">${list.length} 份报告</div></div>
-  ${list.map(r => `<div class="card" style="margin-bottom:14px"><div class="card-head">
-    <div><h3 class="card-title">${esc(disp(r,'date'))} · ${esc(wsLabel(disp(r,'workstream')))}</h3><div class="card-sub">${esc(disp(r,'reportingLead'))} · ${esc(disp(r,'shiftLine'))}</div></div>
-    <div class="right">${r.newIssueIds && r.newIssueIds !== '—' ? `<span class="tag blue">新增 ${esc(disp(r,'newIssueIds'))}</span>` : ''}<button class="btn btn-sm" data-edit-report="${esc(r.date + '|' + r.workstream)}">编辑</button></div>
+  ${shown.map(r => `<div class="card ${r._urgent ? 'row-urgent' : ''}" style="margin-bottom:14px"><div class="card-head">
+    <div><h3 class="card-title">${esc(disp(r,'date'))} · ${esc(wsLabel(disp(r,'workstream')))}${r._urgent ? ' <span class="urgent-flag">' + (isEn() ? 'URGENT' : '紧急') + '</span>' : ''}</h3><div class="card-sub">${esc(disp(r,'reportingLead'))} · ${esc(disp(r,'shiftLine'))}</div></div>
+    <div class="right">${r.newIssueIds && r.newIssueIds !== '—' ? `<span class="tag blue">${isEn() ? 'New' : '新增'} ${esc(disp(r,'newIssueIds'))}</span>` : ''}<button class="btn btn-sm" data-edit-report="${esc(r.date + '|' + r.workstream)}">${isEn() ? 'Edit' : '编辑'}</button> ${rowBtns('reports', r)}</div>
   </div><div class="card-body">
     <div class="detail-grid" style="grid-template-columns:132px 1fr">
       <dt>生产背景 / KPI</dt><dd>${esc(disp(r,'productionContextKpi'))}</dd>
@@ -717,8 +738,8 @@ function renderDecisions() {
     <div class="card kpi purple"><div class="kpi-label">技术评审中</div><div class="kpi-value">${DB.decisions.filter(x => x.approvalStatus === 'Under Technical Review').length}</div><div class="kpi-foot">技术经理 G2 闸门</div></div>
     <div class="card kpi teal"><div class="kpi-label">已批准 / 已关闭</div><div class="kpi-value">${DB.decisions.filter(x => ['Approved', 'Closed'].includes(x.approvalStatus)).length}</div><div class="kpi-foot">含 MoC 变更控制编号</div></div>
   </div>
-  <div class="card"><div class="table-wrap"><table class="tbl"><thead><tr><th>Decision ID</th><th>决策主题</th><th>关联问题</th><th>推荐</th><th>技术审核</th><th>客户批准人</th><th>审批状态</th><th>变更控制</th><th></th></tr></thead><tbody>
-  ${DB.decisions.map(x => `<tr><td class="idcell">${esc(disp(x,'decisionId'))}</td><td class="titlecell" style="max-width:250px">${esc(disp(x,'decisionTopic'))}</td><td><span class="tag blue mono">${esc(x.linkedIssueId || '—')}</span></td><td><b>${esc(disp(x,'recommendedOption'))}</b></td><td class="small">${esc(disp(x,'technicalReviewer'))}</td><td class="small">${esc(disp(x,'clientApprover'))}</td><td>${pillStatus(x.approvalStatus)}</td><td class="mono small">${esc(x.conditionsChangeControlRef || '—')}</td><td><button class="btn btn-xs" data-open="${esc(disp(x,'decisionId'))}">详情</button></td></tr>`).join('')}
+  <div class="card"><div class="table-wrap"><table class="tbl"><thead><tr><th>Decision ID</th><th>决策主题</th><th>关联问题</th><th>推荐</th><th>技术审核</th><th>客户批准人</th><th>审批状态</th><th>变更控制</th><th>${isEn() ? 'Actions' : '操作'}</th></tr></thead><tbody>
+  ${pinUrgent(DB.decisions).map(x => `<tr class="${x._urgent ? 'row-urgent' : ''}"><td class="idcell">${esc(disp(x,'decisionId'))}${x._urgent ? ' <span class="urgent-flag">' + (isEn() ? 'URGENT' : '紧急') + '</span>' : ''}</td><td class="titlecell" style="max-width:250px">${esc(disp(x,'decisionTopic'))}</td><td><span class="tag blue mono">${esc(x.linkedIssueId || '—')}</span></td><td><b>${esc(disp(x,'recommendedOption'))}</b></td><td class="small">${esc(disp(x,'technicalReviewer'))}</td><td class="small">${esc(disp(x,'clientApprover'))}</td><td>${pillStatus(x.approvalStatus)}</td><td class="mono small">${esc(x.conditionsChangeControlRef || '—')}</td><td><button class="btn btn-xs" data-open="${esc(disp(x,'decisionId'))}">${isEn() ? 'Details' : '详情'}</button> ${rowBtns('decisions', x)}</td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
 
@@ -988,6 +1009,30 @@ document.addEventListener('click', (e) => {
     const [dt, ws] = editRep.dataset.editReport.split('|');
     const r = DB.reports.find(x => x.date === dt && x.workstream === ws);
     if (r) openForm('编辑日报 · ' + dt, REPORT_FIELDS, r, v => { Object.assign(r, v); saveDB(); toast('日报已更新'); route(); }, '保存修改');
+    return;
+  }
+  const rowAct = e.target.closest('[data-row-act]');
+  if (rowAct) {
+    const kind = rowAct.dataset.kind;
+    const idx = parseInt(rowAct.dataset.idx, 10);
+    const arr = DB[kind];
+    if (!arr || !arr[idx]) return;
+    if (rowAct.dataset.rowAct === 'urgent') {
+      arr[idx]._urgent = !arr[idx]._urgent;
+      saveDB();
+      toast(arr[idx]._urgent ? (isEn() ? 'Escalated to top' : '已紧急升级并置顶') : (isEn() ? 'Urgent flag removed' : '已取消紧急升级'));
+      route();
+    } else if (rowAct.dataset.rowAct === 'del') {
+      const idKey = LEDGER_ID_KEY[kind];
+      const label = arr[idx][idKey] || (kind === 'reports' ? arr[idx].date + ' · ' + wsLabel(arr[idx].workstream) : '');
+      const msg = isEn() ? `Delete ${idKey ? label + ' ' : ''}? This cannot be undone.` : `确认删除${label ? '「' + label + '」' : '该条目'}？删除后不可撤销。`;
+      if (confirm(msg)) {
+        arr.splice(idx, 1);
+        saveDB();
+        toast(isEn() ? 'Entry deleted' : '条目已删除');
+        route();
+      }
+    }
     return;
   }
   const op = e.target.closest('[data-open]');
