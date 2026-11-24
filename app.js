@@ -94,6 +94,26 @@ function disp(item, key) {
   if (item && isEn() && item._en && item._en[key] != null && item._en[key] !== '') return item._en[key];
   return item ? item[key] : '';
 }
+/* Enum values are stored in English as stable data keys. Display helpers map
+   them to Chinese in zh mode; en mode keeps the canonical English value. */
+function wsLabel(v) {
+  if (!v) return v;
+  return (!isEn() && WORKSTREAM_CN[v]) ? WORKSTREAM_CN[v] : v;
+}
+const STATUS_CN = {
+  'Open': '开放', 'Analysis': '分析中', 'Solution Proposed': '方案已提出',
+  'Client Approval': '客户审批中', 'Implementation': '实施中',
+  'Verification': '验证中', 'Closed': '已关闭', 'On Hold': '暂停',
+  'Not Started': '未开始', 'In Progress': '进行中', 'Blocked': '被阻塞',
+  'Pending Verification': '待验证', 'Draft': '草稿',
+  'Under Technical Review': '技术评审中', 'Recommended': '已推荐',
+  'Pending Client Approval': '待客户批准', 'Approved': '已批准',
+  'Rejected': '已否决', 'Deferred': '已延期'
+};
+function statusLabel(v) {
+  if (!v) return v;
+  return (!isEn() && STATUS_CN[v]) ? STATUS_CN[v] : v;
+}
 
 /* Render the four-section technical problem statement into visually separated
    blocks. Sections are detected by their leading labels (Chinese or English);
@@ -186,7 +206,7 @@ function pillStatus(s) {
     'Pending Client Approval': 's-client', 'Approved': 's-closed',
     'Rejected': 's-overdue', 'Deferred': 's-open'
   };
-  return `<span class="pill ${map[s] || 's-open'}">${esc(s)}</span>`;
+  return `<span class="pill ${map[s] || 's-open'}">${esc(statusLabel(s))}</span>`;
 }
 function pillPriority(p) {
   const cls = p === 'Critical' ? 'p1' : p === 'High' ? 'p2' : p === 'Medium' ? 'p3' : 's-open';
@@ -403,7 +423,7 @@ function renderDashboard() {
   const statusColors = { 'Open': '#94a3b8', 'Analysis': '#7c3aed', 'Solution Proposed': '#1557d6', 'Client Approval': '#e07b00', 'Implementation': '#3b82f6', 'Verification': '#0d9488', 'Closed': '#0f9d58' };
   const totStatus = Math.max(1, byStatus.reduce((a, b) => a + b.n, 0));
   const feed = [];
-  DB.reports.slice(0, 4).forEach(r => feed.push({ date: r.date, txt: `<b>${esc(disp(r,'reportingLead'))}</b> 提交 ${esc(disp(r,'workstream'))} 跟线报告`, meta: esc(disp(r,'activitiesObservations').slice(0, 70)) + '…', c: 'green' }));
+  DB.reports.slice(0, 4).forEach(r => feed.push({ date: r.date, txt: `<b>${esc(disp(r,'reportingLead'))}</b> 提交 ${esc(wsLabel(disp(r,'workstream')))} 跟线报告`, meta: esc(disp(r,'activitiesObservations').slice(0, 70)) + '…', c: 'green' }));
   DB.issues.slice().sort((a, b) => b.lastUpdate.localeCompare(a.lastUpdate)).slice(0, 4).forEach(i => feed.push({ date: i.lastUpdate, txt: `<b>${esc(disp(i,'issueId'))}</b> 状态更新为 ${esc(disp(i,'status'))}`, meta: esc(disp(i,'problemStatement').slice(0, 68)) + '…', c: i.priority === 'Critical' ? 'red' : '' }));
   feed.sort((a, b) => b.date.localeCompare(a.date));
 
@@ -422,13 +442,13 @@ function renderDashboard() {
   <div class="grid grid-32" style="margin-bottom:18px">
     <div class="card">
       <div class="card-head"><div><h3 class="card-title">开放问题 · 专业组分布</h3><div class="card-sub">现场资源投向哪里</div></div><div class="right"><button class="btn btn-sm" data-go="issues">查看台账</button></div></div>
-      <div class="card-body">${byWS.map(x => `<div class="bar-row"><div class="bar-label" title="${esc(disp(x,'w'))}">${esc(disp(x,'w'))}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(x.n / max * 100)}%"></div></div><div class="bar-val">${x.n}</div></div>`).join('')}</div>
+      <div class="card-body">${byWS.map(x => `<div class="bar-row"><div class="bar-label" title="${esc(wsLabel(x.w))}">${esc(wsLabel(x.w))}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(x.n / max * 100)}%"></div></div><div class="bar-val">${x.n}</div></div>`).join('')}</div>
     </div>
     <div class="card">
       <div class="card-head"><div><h3 class="card-title">状态漏斗</h3><div class="card-sub">7 阶段在制分布</div></div></div>
       <div class="card-body">
-        <div class="funnel">${byStatus.map(s => `<div style="flex:${Math.max(.3, s.n / totStatus)};background:${statusColors[s.s]}" title="${esc(s.s)}: ${s.n}">${s.n}</div>`).join('')}</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">${byStatus.map(s => `<div class="small"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${statusColors[s.s]};margin-right:4px"></span>${esc(s.s)} ${s.n}</div>`).join('')}</div>
+        <div class="funnel">${byStatus.map(s => `<div style="flex:${Math.max(.3, s.n / totStatus)};background:${statusColors[s.s]}" title="${esc(statusLabel(s.s))}: ${s.n}">${s.n}</div>`).join('')}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">${byStatus.map(s => `<div class="small"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${statusColors[s.s]};margin-right:4px"></span>${esc(statusLabel(s.s))} ${s.n}</div>`).join('')}</div>
         <div class="callout" style="margin-top:14px">装配工序占开放问题 <b>${DB.issues.filter(i => (i.workstream === 'Cell Assembly Process' || i.workstream === 'Cell Assembly Equipment') && i.status !== 'Closed').length}</b> 项，是当前资源投入重点。</div>
       </div>
     </div>
@@ -518,7 +538,7 @@ function openIssue(id) {
   const kv = (k, v) => `<dt>${esc(k)}</dt><dd>${v || '—'}</dd>`;
   openDrawer(`
     <div class="drawer-head"><div><div class="small mono" style="margin-bottom:4px">${esc(disp(i,'issueId'))} · TECHNICAL ISSUE LOG</div><h2>${esc(disp(i,'processEquipment') || disp(i,'issueId'))}</h2>
-      <div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">${pillPriority(i.priority)}${pillStatus(i.status)}${pillEsc(i.escalationLevel)}<span class="tag">${esc(disp(i,'workstream'))}</span></div></div>
+      <div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">${pillPriority(i.priority)}${pillStatus(i.status)}${pillEsc(i.escalationLevel)}<span class="tag">${esc(wsLabel(disp(i,'workstream')))}</span></div></div>
       <button class="close" data-close="1">×</button></div>
     <div class="drawer-body">
       <div class="sec-title"><span class="n">1</span>问题事实与证据</div>
@@ -673,7 +693,7 @@ function renderReports() {
     <div class="actions"><button class="btn btn-primary" id="btnNewReport">+ 提交日报</button></div></div>
   <div class="filterbar"><select id="fws"><option value="">全部专业组</option>${opts(WORKSTREAMS, reportFilter)}</select><div class="spacer"></div><div class="count">${list.length} 份报告</div></div>
   ${list.map(r => `<div class="card" style="margin-bottom:14px"><div class="card-head">
-    <div><h3 class="card-title">${esc(disp(r,'date'))} · ${esc(disp(r,'workstream'))}</h3><div class="card-sub">${esc(disp(r,'reportingLead'))} · ${esc(disp(r,'shiftLine'))}</div></div>
+    <div><h3 class="card-title">${esc(disp(r,'date'))} · ${esc(wsLabel(disp(r,'workstream')))}</h3><div class="card-sub">${esc(disp(r,'reportingLead'))} · ${esc(disp(r,'shiftLine'))}</div></div>
     <div class="right">${r.newIssueIds && r.newIssueIds !== '—' ? `<span class="tag blue">新增 ${esc(disp(r,'newIssueIds'))}</span>` : ''}<button class="btn btn-sm" data-edit-report="${esc(r.date + '|' + r.workstream)}">编辑</button></div>
   </div><div class="card-body">
     <div class="detail-grid" style="grid-template-columns:132px 1fr">
@@ -831,7 +851,7 @@ function renderKnowledge() {
   return `
   <div class="page-head"><div><h1>知识库 · 可复用解决方案</h1><p>关闭/验证阶段的问题自动沉淀为标准案例，供新项目复用</p></div></div>
   <div class="filterbar"><select id="fws"><option value="">全部专业组</option>${opts(WORKSTREAMS, knowFilter)}</select><div class="spacer"></div><div class="count">${list.length} 个案例</div></div>
-  <div class="grid grid-2">${list.map(i => `<div class="card"><div class="card-head"><div><h3 class="card-title">${esc(disp(i,'issueId'))} · ${esc(disp(i,'processEquipment'))}</h3><div class="card-sub">${esc(disp(i,'workstream'))} · ${esc(disp(i,'impactArea'))}</div></div><div class="right">${pillStatus(i.status)}</div></div>
+  <div class="grid grid-2">${list.map(i => `<div class="card"><div class="card-head"><div><h3 class="card-title">${esc(disp(i,'issueId'))} · ${esc(disp(i,'processEquipment'))}</h3><div class="card-sub">${esc(wsLabel(disp(i,'workstream')))} · ${esc(disp(i,'impactArea'))}</div></div><div class="right">${pillStatus(i.status)}</div></div>
     <div class="card-body">
       <div class="small" style="font-weight:700;color:var(--text-2);margin-bottom:4px">问题 / Problem</div><div style="font-size:12.5px;margin-bottom:10px">${problemStatementHTML(disp(i,'problemStatement'))}</div>
       <div class="small" style="font-weight:700;color:var(--text-2);margin-bottom:4px">根因 / Root Cause</div><div class="callout" style="font-size:12px;margin-bottom:10px">${nl2br(disp(i,'rootCauseAnalysis'))}</div>
@@ -889,7 +909,7 @@ function renderSearch(q) {
   ${iss.length ? `<div class="card" style="margin-bottom:16px"><div class="card-head"><h3 class="card-title">问题 (${iss.length})</h3></div><div class="table-wrap"><table class="tbl"><tbody>${iss.map(i => `<tr data-go-issue="${esc(disp(i,'issueId'))}" style="cursor:pointer"><td class="idcell">${esc(disp(i,'issueId'))}</td><td>${esc(disp(i,'problemStatement'))}</td><td>${pillStatus(i.status)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
   ${acts.length ? `<div class="card" style="margin-bottom:16px"><div class="card-head"><h3 class="card-title">行动 (${acts.length})</h3></div><div class="table-wrap"><table class="tbl"><tbody>${acts.map(a => `<tr data-go-action="${esc(disp(a,'actionId'))}" style="cursor:pointer"><td class="idcell">${esc(disp(a,'actionId'))}</td><td>${esc(disp(a,'improvementAction'))}</td><td>${pillStatus(a.status)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
   ${decs.length ? `<div class="card" style="margin-bottom:16px"><div class="card-head"><h3 class="card-title">决策 (${decs.length})</h3></div><div class="table-wrap"><table class="tbl"><tbody>${decs.map(x => `<tr data-go-decision="${esc(disp(x,'decisionId'))}" style="cursor:pointer"><td class="idcell">${esc(disp(x,'decisionId'))}</td><td>${esc(disp(x,'decisionTopic'))}</td><td>${pillStatus(x.approvalStatus)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
-  ${reps.length ? `<div class="card"><div class="card-head"><h3 class="card-title">跟线日报 (${reps.length})</h3></div><div class="table-wrap"><table class="tbl"><tbody>${reps.map(r => `<tr><td class="idcell">${esc(disp(r,'date'))}</td><td>${esc(disp(r,'workstream'))}</td><td class="small">${esc(disp(r,'activitiesObservations').slice(0, 100))}…</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+  ${reps.length ? `<div class="card"><div class="card-head"><h3 class="card-title">跟线日报 (${reps.length})</h3></div><div class="table-wrap"><table class="tbl"><tbody>${reps.map(r => `<tr><td class="idcell">${esc(disp(r,'date'))}</td><td>${esc(wsLabel(disp(r,'workstream')))}</td><td class="small">${esc(disp(r,'activitiesObservations').slice(0, 100))}…</td></tr>`).join('')}</tbody></table></div></div>` : ''}
   ${(iss.length + acts.length + decs.length + reps.length) === 0 ? empty('未找到匹配内容') : ''}`;
 }
 

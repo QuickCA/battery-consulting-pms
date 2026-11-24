@@ -291,15 +291,7 @@ function polishRough(s) {
     .replace(/^[的了]\s*/, '');
 }
 /* ---------- professional problem statement helpers (8D D2 / 5W2H) ---------- */
-const POLISH_WS_CN = {
-  'Electrode Process': '电极工艺',
-  'Electrode Equipment': '电极设备',
-  'Stacking Process': '叠片工艺',
-  'Stacking Equipment': '叠片设备',
-  'Cell Assembly Process': '电芯装配工艺',
-  'Cell Assembly Equipment': '电芯装配设备',
-  'Other': '其他'
-};
+const POLISH_WS_CN = WORKSTREAM_CN;
 const POLISH_PHENOMENA = [
   [/CCD边缘识别异常|CCD抓边|抓边/, 'CCD边缘识别异常'],
   [/极片边缘波浪|陶瓷边区域波浪边|陶瓷边波浪边|波浪边|边浪/, '极片边缘波浪'],

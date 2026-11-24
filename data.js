@@ -9,6 +9,16 @@ const WORKSTREAMS = [
   'Cell Assembly Process', 'Cell Assembly Equipment',
   'Other'
 ];
+// Canonical Chinese labels for the 7 workstreams (shared by intake and display).
+const WORKSTREAM_CN = {
+  'Electrode Process': '电极工艺',
+  'Electrode Equipment': '电极设备',
+  'Stacking Process': '叠片工艺',
+  'Stacking Equipment': '叠片设备',
+  'Cell Assembly Process': '电芯装配工艺',
+  'Cell Assembly Equipment': '电芯装配设备',
+  'Other': '其他'
+};
 
 const IMPACT_AREAS = ['Safety', 'Quality', 'Output', 'Cost', 'Delivery', 'Equipment', 'Other'];
 const PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
