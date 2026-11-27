@@ -1783,7 +1783,7 @@ function renderIntake() {
   intakeItems.forEach(i => { if (i.include) counts[i.kind]++; });
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   return `
-  <div class="page-head"><div><h1>智能录入</h1><p>把整段描述粘贴进来，系统自动识别问题、行动、决策与日报，确认后写入对应台账</p></div>
+  <div class="page-head"><div><h1>智能录入<span style="font-size:12px;font-weight:600;vertical-align:middle;margin-left:10px;padding:3px 9px;border-radius:20px;background:#eef4ff;color:#2563eb;border:1px solid #cfe0ff">AI 驱动</span></h1><p>把整段描述粘贴进来，由 AI 模型自动分析、分类并按技术深度整理，确认后写入对应台账</p></div>
     <div class="actions"><button class="btn" id="btnIntakeClear">清空</button></div></div>
 
   <div class="grid grid-23" style="margin-bottom:18px">
@@ -1797,13 +1797,13 @@ function renderIntake() {
         <div class="fld"><label>描述内容 <span class="req">*</span></label>
           <textarea id="intakeText" data-i18n-value="1" data-en-value="${esc(window._intakeDraftEn || '')}" rows="14" placeholder="例：今天跟线叠片机#3，发现对齐度偏移±0.8mm，规格±0.5mm，CCD 200片确认。需要设备工程师在11月26日前更换定位销……">${esc(window._intakeDraft || '')}</textarea>
           <div class="hint" id="intakeLangHint" data-i18n-en-only="1" style="display:none">当前为英文对照显示，中文原文已保留；如需编辑或重新识别，请切回中文</div>
-          <div class="hint">系统按句号、分号、换行切分，识别四类内容，并将口语化原文整理为结构化表述后填入条目</div>
+          <div class="hint">AI 模型按语义识别四类内容，并将口语化原文整理为结构化表述；网络不可用时自动回退到本地规则引擎</div>
         </div>
-        <button class="btn btn-primary btn-block" id="btnIntakeParse" style="margin-top:14px">分析并整理</button>
+        <button class="btn btn-primary btn-block" id="btnIntakeParse" style="margin-top:14px">AI 分析并整理</button>
       </div>
     </div>
     <div class="card">
-      <div class="card-head"><div><h3 class="card-title">识别规则</h3><div class="card-sub">从描述中自动提取的字段</div></div></div>
+      <div class="card-head"><div><h3 class="card-title">分析规则</h3><div class="card-sub">AI 模型内置的分析方法与提取字段</div></div></div>
       <div class="card-body">
         <div class="sec-title" style="margin-top:0"><span class="n">1</span>自动分类</div>
         <div class="rule-list">
@@ -1835,7 +1835,7 @@ function renderIntake() {
   </div>
 
   <div class="card">
-    <div class="card-head"><div><h3 class="card-title">整理结果</h3><div class="card-sub">${intakeParsed ? `共识别 ${intakeItems.length} 条，勾选写入 ${total} 条` : '尚未分析'}</div></div>
+    <div class="card-head"><div><h3 class="card-title">整理结果</h3><div class="card-sub">${intakeParsed ? `共识别 ${intakeItems.length} 条，勾选写入 ${total} 条${intakeItems[0] && intakeItems[0].engine === 'ai' ? ' · 来源：AI 模型分析' : ' · 来源：本地规则引擎'}` : '尚未分析'}</div></div>
       <div class="right">
         ${intakeParsed ? `<span class="tag blue">问题 ${counts.issue}</span><span class="tag teal">行动 ${counts.action}</span><span class="tag purple">决策 ${counts.decision}</span><span class="tag warn">日报 ${counts.report}</span>` : ''}
         ${intakeParsed ? `<button class="btn btn-sm" id="btnIntakeAll">全选</button><button class="btn btn-primary btn-sm" id="btnIntakeCommit">确认写入 ${total} 条</button>` : ''}
@@ -1949,11 +1949,42 @@ document.addEventListener('click', (e) => {
     const roleSel = document.getElementById('intakeRole');
     const text = ta ? String(window.I18N && window.I18N.sourceValue ? window.I18N.sourceValue(ta) : ta.value).trim() : '';
     if (!text) { toast('请先粘贴描述内容'); return; }
+    if (window._intakeBusy) return;
     window._intakeDraft = text;
     const role = INTAKE_ROLES.find(r => r.label === (roleSel ? roleSel.value : '')) || INTAKE_ROLES[0];
-    const found = parseIntakeText(text, role);
-    toast('识别到 ' + found.length + ' 条内容');
-    route();
+    const btn = document.getElementById('btnIntakeParse');
+    const ai = window.AI_INTAKE;
+    if (!ai || typeof ai.parse !== 'function') {
+      const found = parseIntakeText(text, role);
+      toast('识别到 ' + found.length + ' 条内容');
+      route();
+      return;
+    }
+    // AI-first: show progress, keep the local rule engine as a silent fallback.
+    window._intakeBusy = true;
+    const en = (() => { try { return !!(window.I18N && window.I18N.lang === 'en'); } catch (x) { return false; } })();
+    const label = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = en ? 'AI analysing…' : 'AI 分析中…'; }
+    ai.parse(text, role).then(found => {
+      if (found && found.length) {
+        intakeItems = found;
+        intakeParsed = true;
+        window._intakeDraftEn = intakeItems.map(i => i.textEn).filter(Boolean).join('\n\n');
+        toast((en ? 'AI analysis: ' : 'AI 分析完成，识别 ') + found.length + (en ? ' items' : ' 条内容'));
+      } else {
+        const local = parseIntakeText(text, role);
+        toast((en ? 'AI unavailable — local rules: ' : 'AI 不可用，已按本地规则识别 ') + local.length + (en ? ' items' : ' 条内容'));
+      }
+      route();
+    }).catch(() => {
+      const local = parseIntakeText(text, role);
+      toast((en ? 'AI unavailable — local rules: ' : 'AI 不可用，已按本地规则识别 ') + local.length + (en ? ' items' : ' 条内容'));
+      route();
+    }).finally(() => {
+      window._intakeBusy = false;
+      const b = document.getElementById('btnIntakeParse');
+      if (b) { b.disabled = false; b.textContent = label || (en ? 'Analyse & organise' : '分析并整理'); }
+    });
     return;
   }
   if (e.target.closest('#btnIntakeAll')) {
