@@ -731,6 +731,7 @@ const I18N_DICT = {
 
 
 
+  '激光模切分条一体机': 'Laser Die-cutting & Slitting Integrated Machine ',
   '叠片机': 'Stacker ',
   '顶盖激光焊机': 'Lid Laser Welder ',
   '集流盘焊机': 'Current Collector Welder ',
@@ -860,6 +861,7 @@ const I18N_TERMS = {
   '涂布面密度': 'coating areal density',
   '涂布机': 'coater',
   '辊压机': 'calender',
+  '激光模切分条一体机': 'laser die-cutting and slitting integrated machine',
   '分切机': 'slitter',
   '叠片机': 'stacker',
   '入壳机': 'cell insertion machine',

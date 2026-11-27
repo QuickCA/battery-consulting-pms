@@ -18,17 +18,28 @@ let intakeParsed = false;
 
 /* ---------------- text analysis ---------------- */
 function intakeBlocks(text) {
-  return text.split(/[\n。；;！!]+/)
+  const raw = text.split(/[\n。；;！!]+/)
     .map(s => s.replace(/^\s*(?:[0-9]+|[一二三四五六七八九十]+)\s*[.、）)]\s*/, '').trim())
-    .filter(s => s.length >= 5)
-    .flatMap(block => {
-      if (block.length < 26) return [block];
-      const m = block.match(/(?:^|[，,；;])\s*(?:需要|要求|请|计划|安排|务必|建议|决定|批准|采用|推荐)/);
-      if (!m || m.index < 8) return [block];
-      let at = m.index;
-      if (/[，,；;]/.test(m[0][0])) at += 1;
-      return [block.slice(0, at), block.slice(at)].map(s => s.trim()).filter(s => s.length >= 5);
-    });
+    .filter(s => s.length >= 5);
+  // A finding followed by further "发现 / 观察 / 怀疑 …" clauses is one causal
+  // chain (symptom + observation + hypothesis), not separate issues.
+  // Splitting these apart is what produced two shallow, duplicated entries.
+  const CONT = /^(?:发现|观察|怀疑|确认|检查|查见|看到|可见|表明|说明|推测|疑似|可能|判断|分析|测得|测量|复测|同时|另外|并且|此外|而且|其中|经查|现场发现|现场观察)/;
+  const ABNORMAL = /异常|不良|缺陷|超标|偏差|超出|报警|故障|失效|断带|偏移|不一致|波动|针孔|毛刺|虚焊|漏率|卡滞|褶皱|限位/;
+  const merged = [];
+  raw.forEach(b => {
+    const prev = merged[merged.length - 1];
+    if (prev && CONT.test(b) && ABNORMAL.test(prev)) merged[merged.length - 1] = prev + '；' + b;
+    else merged.push(b);
+  });
+  return merged.flatMap(block => {
+    if (block.length < 26) return [block];
+    const m = block.match(/(?:^|[，,；;])\s*(?:需要|要求|请|计划|安排|务必|建议|决定|批准|采用|推荐)/);
+    if (!m || m.index < 8) return [block];
+    let at = m.index;
+    if (/[，,；;]/.test(m[0][0])) at += 1;
+    return [block.slice(0, at), block.slice(at)].map(s => s.trim()).filter(s => s.length >= 5);
+  });
 }
 
 function countHits(t, reList) {
@@ -79,6 +90,7 @@ const EQUIP_RULES = [
   { re: /卷绕机|winder/i, ws: 'Stacking Equipment', eq: '卷绕机' },
   { re: /涂布机|涂布模头|涂布头|coater|coating\s*machine|coating/i, ws: 'Electrode Equipment', eq: '涂布机' },
   { re: /辊压机|辊压|压延|calender|calendering/i, ws: 'Electrode Equipment', eq: '辊压机' },
+  { re: /激光模切分条一体机|模切分条一体机|激光模切|模切分条|分条一体机/i, ws: 'Electrode Equipment', eq: '激光模切分条一体机' },
   { re: /分切机|分切|slitter|slitting/i, ws: 'Electrode Equipment', eq: '分切机' },
   { re: /入壳机|入壳工位|电芯入壳|insertion|cell\s*insert/i, ws: 'Cell Assembly Equipment', eq: '电芯入壳机' },
   { re: /装配线|assembly\s*line/i, ws: 'Cell Assembly Equipment', eq: '装配线' },
@@ -103,7 +115,7 @@ function intakeMachineNo(t, idx) {
   if (idx == null) return '';
   const txt = String(t || '');
   const near = txt.slice(Math.max(0, idx - 8), idx + 80);
-  const numRe = [/#\s*(\d+)/, /(?:机台|第)\s*(\d+)\s*号?/, /(\d+)\s*号(?:机|线)?/, /[Ll]ine\s*#?\s*(\d+)/];
+  const numRe = [/#\s*(\d+)/, /(\d+)\s*#(?:机|线)?/, /(?:机台|第)\s*(\d+)\s*号?/, /(\d+)\s*号(?:机|线)?/, /[Ll]ine\s*#?\s*(\d+)/];
   let m = null;
   for (const re of numRe) { m = near.match(re); if (m) break; }
   if (!m) for (const re of numRe) { m = txt.match(re); if (m) break; }
@@ -304,6 +316,7 @@ const POLISH_PHENOMENA = [
   [/厚度回弹波动|厚度回弹|回弹/, '辊压后厚度回弹'],
   [/漏率超标|氦检漏率|气密失效|气密不良|气密异常/, '电芯气密漏率超标'],
   [/气胀/, '电芯气胀'],
+  [/纠偏.*(?:限位|断带)|(?:单向|一直向一个方向|向一个方向)纠偏|张紧不一致|左右.*张紧|极片断带|断带/, '纠偏单向到底导致极片断带'],
   [/褶皱/, '极片褶皱'],
   [/飞溅/, '焊接飞溅'],
   [/划伤/, '外观划伤'],
@@ -466,6 +479,12 @@ const POLISH_DEEP_KB = [
     verify: ['辊缝实际值与设定值比对', '辊压力与辊速记录', '压实密度测试结果', '回弹量与放置时间关系曲线']
   },
   {
+    re: /纠偏|张紧不一致|一边紧.*一边松|断带|模切分条|料区延展|主驱辊/i,
+    mechanism: ['极片料区延展不一致导致分切前左右张力失衡，纠偏系统持续向单一方向纠偏直至触发限位', '主驱辊水平度偏差（辊面不平行）造成左右极片张紧不一致，形成稳定的跑偏驱动力', '纠偏传感器零点 / 量程漂移或纠偏辊响应滞后', '分切前各段张力设定与锥度控制不匹配，来料卷径 / 端面不齐'],
+    chain: '分切前左右极片张紧不一致使纠偏系统持续单向纠偏，达到限位后极片失稳断带，直接造成产线停机与在制品报废；若未及时纠正，分切后极片宽度与边缘位置一致性下降，向下传递至叠片对齐与极耳位置控制，影响电芯容量一致性与内部安全间隙，并带来 FPY 损失',
+    verify: ['纠偏过辊左右侧极片张力实测与张力传感器校验', '主驱辊水平度 / 辊面平行度与跳动检测', '极片料区纵向 / 横向延展率与厚度分布测量', '分切前各段张力设定、锥度参数与纠偏响应记录']
+  },
+  {
     re: /毛刺|分切|slitter/i,
     mechanism: ['分切刀具磨损或刀缝间隙不当', '分切速度与张力匹配偏差', '来料厚度波动'],
     chain: '极片切边毛刺可能刺穿隔膜形成内部微短路，造成自放电率升高与热失控风险，并干扰叠片边缘对齐与隔膜覆盖',
@@ -572,6 +591,16 @@ const POLISH_DEEP_KB_EN = [
     chain: 'Thickness springback causes jellyroll thickness out of tolerance after stacking, affecting insertion clearance and potentially causing can bulging and abnormal assembly stress, while reducing cell capacity consistency.',
     verify: ['Roll-gap actual vs. set-point comparison', 'Roll pressure and speed records', 'Compacted-density test results', 'Springback vs. dwell-time curve']
   },
+  { // web guiding / tension imbalance / strip break
+    mechanism: [
+      'Inconsistent electrode web elongation across the material zone creating left/right tension imbalance upstream of slitting and driving continuous one-directional web guiding to the stroke limit',
+      'Main-drive roll out-of-level (non-parallel roll faces) producing unequal web tension across the electrode width and a persistent tracking force',
+      'Web-guide sensor zero / span drift or lagging guide-roll response',
+      'Mismatched tension and taper settings upstream of slitting, or incoming roll diameter and edge-alignment variation'
+    ],
+    chain: 'Unequal left/right electrode tension upstream of slitting drives continuous one-directional web guiding until the stroke limit is reached; the web then loses stability and breaks, causing immediate line stoppage and scrap of in-process electrode. If left uncorrected, slit-width and edge-position consistency degrade and propagate to stacking alignment and tab-position control, affecting cell capacity consistency and internal safety clearance with downstream FPY loss.',
+    verify: ['Measured left/right web tension at the guide roll and tension-transducer calibration', 'Main-drive roll levelness, face parallelism and runout inspection', 'Electrode elongation (MD/TD) and thickness profile across the material zone', 'Pre-slit tension setpoints, taper parameters and web-guide response records']
+  },
   { // slitting / burr
     mechanism: [
       'Slitting blade wear or improper blade gap',
@@ -672,6 +701,12 @@ function polishProblem(t) {
   defect = defect.replace(/^(?:今天|今日|本班|昨天|白班|夜班|中班|早班|晚班|Shift\s*[A-D]|现场|跟线|发现|出现|存在|有)\s*/i, '')
                  .replace(/(?:属于|优先级|影响域).*$/, '');
   if (/节拍$/.test(defect) && spec.cmp === '未达目标') defect += '偏高';
+  // Web-guiding / tension scenarios: anchor the defect on the actual abnormal
+  // clause, not on the leading date or on a bare equipment noun.
+  if (/纠偏|断带|张紧不一致|一边紧.*一边松|模切分条|料区延展|主驱辊/.test(txt)) {
+    const anchor = parts.find(x => /纠偏|断带|张紧|料区延展|主驱辊/.test(x) && !/^20\d{2}/.test(x));
+    if (anchor) defect = anchor;
+  }
   const eqCore = eq.replace(/#\d+/, '').trim();
   let common = 0;
   while (common < Math.min(eqCore.length, defect.length) && eqCore[common] === defect[common]) common++;
@@ -699,7 +734,9 @@ function polishProblem(t) {
   const batch = polishBatchInfo(txt);
   const prod = polishProdContext(txt);
   const contain = polishContainment(txt).replace(/^临时围堵：/, '');
-  const statedCause = ((txt.match(/(?:根因(?:是|为|：|:)?|原因是|由于|因为)([^，。；;]{3,60})/) || [])[1] || '').replace(/^(?:确认是|确认|是|为)\s*/, '');
+  const statedCause = ((txt.match(/(?:根因(?:是|为|：|:)?|原因是|由于|因为|怀疑是?|疑似|推测(?:是|为)?|可能是?)([^，。；;]{3,60})/) || [])[1] || '')
+    .replace(/^(?:确认是|确认|是|为)\s*/, '')
+    .replace(/(?:导致的|导致|造成|引起|所致)$/, '');
   const statedImpact = (txt.match(/(?:导致|造成|引起|使得|瓶颈在)\s*([^，。；;]{2,42})/)
     || txt.match(/存在([^，。；;]{2,30}(?:风险|隐患))/) || [])[1] || '';
 
@@ -718,6 +755,13 @@ function polishProblem(t) {
   if (prod.length) evBits.push(prod.join('、'));
   if (evBits.length) facts += '。检测依据：' + evBits.join('；');
   if (batch) facts += '；涉及批次 ' + batch;
+  // Trigger condition and direct observations are first-hand facts, not inference.
+  const trigger = (txt.match(/每次(?:开始)?走带时|开始走带时|每次启动|开机时|换卷后/) || [''])[0];
+  if (trigger) facts += '；触发条件：' + polishNorm(trigger);
+  const obsBits = [];
+  if (/一边紧.*一边松/.test(txt)) obsBits.push('纠偏过辊极片一边紧一边松');
+  if (/主驱左右极片张紧不一致|左右极片张紧不一致/.test(txt)) obsBits.push('分切前主驱左右极片张紧不一致');
+  if (obsBits.length) facts += '；现场观察：' + obsBits.join('，');
   if (statedCause && /确认|证实/.test(txt)) facts += '；根因已确认：' + polishRough(statedCause);
   facts = polishEnd(facts, 460);
 
@@ -943,6 +987,7 @@ function enPhenomenon(defect, eq) {
     [/厚度回弹/, 'post-calendering thickness springback'],
     [/气密漏率超标|漏率超标|气密/, 'cell helium leak-rate exceedance'],
     [/气胀/, 'cell swelling'],
+    [/纠偏单向到底导致极片断带|纠偏.*限位|断带/, 'web break after one-directional web guiding to the stroke limit'],
     [/褶皱/, 'separator / electrode wrinkle'],
     [/飞溅/, 'weld spatter'],
     [/划伤/, 'cosmetic scratch'],
@@ -987,6 +1032,24 @@ function enDeviation(meas, spec, cmp) {
    so technical expressions never survive as Chinese fragments. */
 const EN_DOMAIN = {
   /* defect / phenomenon phrases */
+  '激光模切分条一体机': 'laser die-cutting and slitting integrated machine',
+  '纠偏单向到底导致极片断带': 'electrode web break after one-directional web guiding to the stroke limit',
+  '极片料区延展不一致': 'inconsistent electrode elongation across the material zone',
+  '主驱左右极片张紧不一致': 'left/right electrode web tension imbalance upstream of slitting',
+  '左右极片张紧不一致': 'left/right web tension imbalance',
+  '纠偏过辊': 'web-guide roll',
+  '主驱辊不水平': 'main-drive roll out of level',
+  '主驱辊': 'main-drive roll',
+  '极片断带': 'electrode web break',
+  '断带': 'web break',
+  '张紧不一致': 'tension imbalance',
+  '达到限位': 'reaching the stroke limit',
+  '限位': 'stroke limit',
+  '纠偏': 'web guiding',
+  '每次开始走带时': 'at every start of web travel',
+  '开始走带时': 'at web start-up',
+  '一边紧': 'tight on one side',
+  '一边松': 'loose on the other side',
   'CCD抓边问题': 'CCD edge-detection anomaly',
   'CCD抓边': 'CCD edge-detection deviation',
   '抓边不良': 'edge-detection failure',
@@ -1176,6 +1239,10 @@ function polishProblemEn(t) {
   const spec = polishSpec(txt);
   let defect = polishDefect(partSafe(parts, pIdx)) || polishDefect(parts.slice(0, pIdx + 2).join('，')) || polishRough(parts[pIdx] || txt).slice(0, 40);
   if (/节拍$/.test(defect) && spec.cmp === '未达目标') defect += '偏高';
+  if (/纠偏|断带|张紧不一致|一边紧.*一边松|模切分条|料区延展|主驱辊/.test(txt)) {
+    const anchor = parts.find(x => /纠偏|断带|张紧|料区延展|主驱辊/.test(x) && !/^20\d{2}/.test(x));
+    if (anchor) defect = anchor;
+  }
   const zhPhenomenon = polishPhenomenon(defect, ident.equipment);
   const phenomenon = enPhenomenon(zhPhenomenon, ident.equipment);
   const when = polishWhen(txt);
@@ -1218,6 +1285,12 @@ function polishProblemEn(t) {
   ev.push(...enProd(txt));
   if (ev.length) facts += ' Inspection basis: ' + ev.join('; ') + '.';
   if (batch) facts += ' Affected lot: ' + batch + '.';
+  const trigEn = (txt.match(/每次(?:开始)?走带时|开始走带时|每次启动|开机时|换卷后/) || [''])[0];
+  if (trigEn) facts += ' Trigger condition: ' + forceEn(polishNorm(trigEn)) + '.';
+  const obsEn = [];
+  if (/一边紧.*一边松/.test(txt)) obsEn.push('web tight on one side and loose on the other at the web-guide roll');
+  if (/主驱左右极片张紧不一致|左右极片张紧不一致/.test(txt)) obsEn.push('left/right electrode web tension imbalance upstream of slitting');
+  if (obsEn.length) facts += ' Direct observations: ' + obsEn.join('; ') + '.';
 
   /* 2 - impact chain (inference) */
   let chain = kb.chain;
@@ -1236,23 +1309,24 @@ function polishProblemEn(t) {
 
   /* 3 - hypotheses (explicitly not conclusions) */
   const cause = ((txt.match(/(?:怀疑(?:是)?|推测(?:是)?|初步判断(?:是)?)([^，。；;]{3,60})/) || txt.match(/(?:根因(?:是|为|：|:)?|原因是|由于|因为)([^，。；;]{3,60})/) || [])[1] || '')
-    .replace(/^(?:确认是|确认|是|为)\s*/, '').replace(/(?:导致|造成|引起|所致)$/, '');
+    .replace(/^(?:确认是|确认|是|为)\s*/, '').replace(/(?:导致的|导致|造成|引起|所致)$/, '');
   const confirmed = !!(cause && /确认|证实/.test(txt));
   const hypo = [];
-  let onSiteTokens = [];
+  let onSiteText = '';
   if (cause && !confirmed) {
     const contribH = (txt.match(/主要是由于([^，。；;]{2,40})/) || [])[1] || '';
     const lead = contribH ? forceEn(contribH) + '; ' : '';
-    const onSiteText = forceEn(polishRough(cause));
+    onSiteText = forceEn(polishRough(cause));
     hypo.push('Preliminary on-site indication: ' + lead + onSiteText + ' (pending data verification)');
-    onSiteTokens = (onSiteText.toLowerCase().match(/[a-z]{6,}/g) || []).filter(Boolean);
   }
   kb.mechanism.forEach(m => {
     if (hypo.length >= 4) return;
-    // Skip KB mechanisms already covered by the on-site indication.
+    // Keep mechanism directions that add causal detail beyond the on-site
+    // indication; drop only near-verbatim duplicates. Keyword-overlap removal
+    // was discarding the two most relevant mechanisms in web-break cases.
     const ml = m.toLowerCase();
-    const overlap = onSiteTokens.filter(t => ml.includes(t)).length;
-    if (onSiteTokens.length >= 2 && overlap >= 2) return;
+    const ol = onSiteText.toLowerCase();
+    if (ol.includes(ml) || ml.includes(ol)) return;
     hypo.push(m);
   });
   let h = '[Hypotheses to verify | NOT conclusions]\n' + (hypo.length ? enNumbered(hypo, 4) : 'No clear mechanism identified; on-site investigation required.');
