@@ -19,12 +19,22 @@
     publishableKey: 'wbpk_2Mao2qvzeFC8nrTzOpeMoa_jMmVGyvUOn6sKutp7vbOLns7bRjlpQxC'
   };
 
+  /* Built-in keyless free model: Pollinations anonymous tier (GPT-6 Luna).
+     No API key, CORS-enabled, works directly from GitHub Pages. */
+  var FREE_AI_ENDPOINT = 'https://text.pollinations.ai/openai';
+  var FREE_AI_MODEL = 'openai-fast';
+
   var cloud = null;
   var modelId = null;
   var lastEngine = 'local';        // 'ai' | 'local' — exposed for the UI badge
   var lastReason = '';
 
   function sdk() { return window.WorkBuddyCloud || null; }
+
+  function isWorkBuddyHost() {
+    var h = (typeof location !== 'undefined' && location.hostname) || '';
+    return /\.workbuddy\.(host|cn)$/i.test(h);
+  }
 
   function getCloud() {
     if (cloud) return cloud;
@@ -179,7 +189,7 @@
     enforceEnums(en, kind, baseline.dataEn);
 
     // Bilingual invariant: English free-text must carry no Chinese characters.
-    ['problemStatement', 'evidenceData', 'initialContainmentRiskNote', 'rootCauseAnalysis',
+    ['processEquipment', 'problemStatement', 'evidenceData', 'initialContainmentRiskNote', 'rootCauseAnalysis',
       'proposedSolution', 'improvementAction', 'expectedOutcomeAcceptanceCriteria',
       'decisionTopic', 'backgroundEvidence', 'recommendedOption', 'technicalRationaleRisks',
       'activitiesObservations', 'productionContextKpi', 'nextDayPriorities'].forEach(function (k) {
@@ -214,22 +224,24 @@
     var both = (code + ' ' + msg).toLowerCase();
     if (both.indexOf('origin') !== -1 && both.indexOf('not allowed') !== -1) return 'ORIGIN_NOT_ALLOWED';
     if (both.indexOf('access_denied') !== -1) return 'ORIGIN_NOT_ALLOWED';
-    if (both.indexOf('chatgpt_proxy') !== -1) return 'CHATGPT_PROXY';
+    if (both.indexOf('free_ai_proxy') !== -1) return 'FREE_AI_PROXY';
+    if (both.indexOf('pollinations') !== -1) return 'FREE_AI_MODEL';
     if (both.indexOf('network') !== -1 || both.indexOf('fetch') !== -1 || both.indexOf('gateway') !== -1) return 'NETWORK';
     if (both.indexOf('sdk_not_loaded') !== -1) return 'SDK_NOT_LOADED';
     if (both.indexOf('no_model') !== -1) return 'NO_MODEL';
     return code || msg || 'UNKNOWN';
   }
 
-  /* Optional OpenAI ChatGPT proxy. The URL is public config; the API key stays
-     in the Cloudflare Worker secret and never reaches the browser. */
-  function chatGptProxyUrl() {
-    var u = (window.CHATGPT_PROXY_URL || '').trim();
+  /* Optional custom proxy (e.g. Cloudflare Workers AI). The URL is public
+     config; any model credential stays server-side and never reaches the
+     browser. Leave it empty to use the built-in keyless free model. */
+  function freeAiProxyUrl() {
+    var u = (window.FREE_AI_PROXY_URL || '').trim();
     if (!/^https:\/\//i.test(u)) return '';
     return u.replace(/\/+$/, '');
   }
 
-  async function callChatGptProxy(text, role, proxyUrl) {
+  async function callFreeAiProxy(text, role, proxyUrl) {
     var res = await fetch(proxyUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -242,17 +254,67 @@
     var bodyText = '';
     try { bodyText = await res.text(); } catch (e) { bodyText = ''; }
     if (!res.ok) {
-      throw new Error('CHATGPT_PROXY_' + res.status + (bodyText ? ': ' + bodyText.slice(0, 160) : ''));
+      throw new Error('FREE_AI_PROXY_' + res.status + (bodyText ? ': ' + bodyText.slice(0, 160) : ''));
     }
     var data;
     try { data = JSON.parse(bodyText); }
-    catch (e) { throw new Error('CHATGPT_PROXY_BAD_JSON'); }
+    catch (e) { throw new Error('FREE_AI_PROXY_BAD_JSON'); }
     var content = data && data.content;
     if (!content && data && data.choices && data.choices[0] && data.choices[0].message) {
       content = data.choices[0].message.content;
     }
-    if (!content) throw new Error('CHATGPT_PROXY_EMPTY');
+    if (!content) throw new Error('FREE_AI_PROXY_EMPTY');
     return content;
+  }
+
+  /* Default keyless provider: free Pollinations endpoint, CORS enabled. */
+  async function callFreeModel(text, role) {
+    var res = await fetch(FREE_AI_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: FREE_AI_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt() },
+          { role: 'user', content: userPayload(text, role, owners()) }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2
+      })
+    });
+    var bodyText = '';
+    try { bodyText = await res.text(); } catch (e) { bodyText = ''; }
+    if (!res.ok) {
+      throw new Error('POLLINATIONS_' + res.status + (bodyText ? ': ' + bodyText.slice(0, 160) : ''));
+    }
+    var data;
+    try { data = JSON.parse(bodyText); }
+    catch (e) { throw new Error('POLLINATIONS_BAD_JSON'); }
+    var content = data && data.choices && data.choices[0] && data.choices[0].message
+      ? data.choices[0].message.content : '';
+    if (!content) throw new Error('POLLINATIONS_EMPTY');
+    return content;
+  }
+
+  /* Keyless WorkBuddy Cloud path — used on the hosted domain only. */
+  async function callWorkBuddyModel(text, role) {
+    var model = await getModel();
+    var answer = '';
+    var stream = getCloud().llm.chat.completions.create({
+      model: model,
+      messages: [
+        { role: 'system', content: systemPrompt() },
+        { role: 'user', content: userPayload(text, role, owners()) }
+      ],
+      stream: true,
+      response_format: { type: 'json_object' },
+      temperature: 0.2
+    });
+    for await (var chunk of stream) {
+      var delta = chunk && chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
+      if (delta && delta.content) answer += delta.content;
+    }
+    return answer;
   }
 
   /* Main entry: returns a promise resolving to items[] on success, or null on
@@ -261,25 +323,13 @@
     lastReason = '';
     try {
       var answer = '';
-      var proxyUrl = chatGptProxyUrl();
+      var proxyUrl = freeAiProxyUrl();
       if (proxyUrl) {
-        answer = await callChatGptProxy(text, role, proxyUrl);
+        answer = await callFreeAiProxy(text, role, proxyUrl);
+      } else if (isWorkBuddyHost()) {
+        answer = await callWorkBuddyModel(text, role);
       } else {
-        var model = await getModel();
-        var stream = getCloud().llm.chat.completions.create({
-          model: model,
-          messages: [
-            { role: 'system', content: systemPrompt() },
-            { role: 'user', content: userPayload(text, role, owners()) }
-          ],
-          stream: true,
-          response_format: { type: 'json_object' },
-          temperature: 0.2
-        });
-        for await (var chunk of stream) {
-          var delta = chunk && chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
-          if (delta && delta.content) answer += delta.content;
-        }
+        answer = await callFreeModel(text, role);
       }
       var parsed;
       try { parsed = JSON.parse(stripFence(answer)); }
@@ -299,7 +349,10 @@
 
   window.AI_INTAKE = {
     parse: parse,
-    status: function () { return { engine: lastEngine, reason: lastReason, model: modelId, sdk: !!sdk(), provider: chatGptProxyUrl() ? 'chatgpt' : 'workbuddy' }; },
+    status: function () {
+      var p = freeAiProxyUrl() ? 'custom-proxy' : (isWorkBuddyHost() ? 'workbuddy' : 'pollinations');
+      return { engine: lastEngine, reason: lastReason, model: modelId, sdk: !!sdk(), provider: p };
+    },
     resetModel: function () { modelId = null; }
   };
 })();

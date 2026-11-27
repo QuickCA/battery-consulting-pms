@@ -1941,9 +1941,13 @@ function aiFallbackToast(en, count, reason) {
     return (en ? 'Cloud AI is not enabled for this domain — ' : '云端 AI 未授权当前域名 — ')
       + count + tail + (en ? '. Use the WorkBuddy-hosted link for AI analysis.' : '；使用 WorkBuddy 托管链接可启用 AI 分析。');
   }
-  if (reason === 'CHATGPT_PROXY') {
-    return (en ? 'ChatGPT proxy unavailable — ' : 'ChatGPT 代理不可用 — ') + count + tail
-      + (en ? '. Check the Worker URL and OPENAI_API_KEY secret.' : '；请检查 Worker URL 与 OPENAI_API_KEY 密钥。');
+  if (reason === 'FREE_AI_PROXY') {
+    return (en ? 'Free-AI proxy unavailable — ' : '免费 AI 代理不可用 — ') + count + tail
+      + (en ? '. Check the configured Worker URL.' : '；请检查已配置的 Worker URL。');
+  }
+  if (reason === 'FREE_AI_MODEL') {
+    return (en ? 'Free AI model temporarily unavailable — ' : '免费 AI 模型暂不可用 — ') + count + tail
+      + (en ? '. The local rule engine took over.' : '；已自动切换本地规则识别。');
   }
   if (reason === 'NETWORK') {
     return (en ? 'Cloud AI unreachable — ' : '云端 AI 连接失败 — ') + count + tail;
@@ -1992,10 +1996,13 @@ document.addEventListener('click', (e) => {
         intakeItems = found;
         intakeParsed = true;
         window._intakeDraftEn = intakeItems.map(i => i.textEn).filter(Boolean).join('\n\n');
-        const viaChatGpt = ai.status && ai.status().provider === 'chatgpt';
-        toast((viaChatGpt ? (en ? 'ChatGPT analysis: ' : 'ChatGPT 分析完成，识别 ')
-                          : (en ? 'AI analysis: ' : 'AI 分析完成，识别 '))
-          + found.length + (en ? ' items' : ' 条内容'));
+        const provider = (ai.status && ai.status().provider) || '';
+        const prefix = provider === 'pollinations'
+          ? (en ? 'Free AI model analysis: ' : '免费 AI 模型分析完成，识别 ')
+          : provider === 'custom-proxy'
+            ? (en ? 'Proxy AI analysis: ' : '代理 AI 分析完成，识别 ')
+            : (en ? 'AI analysis: ' : 'AI 分析完成，识别 ');
+        toast(prefix + found.length + (en ? ' items' : ' 条内容'));
       } else {
         const local = parseIntakeText(text, role);
         toast(aiFallbackToast(en, local.length, ai && ai.status ? ai.status().reason : ''));

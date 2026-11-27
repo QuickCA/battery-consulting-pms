@@ -1,3 +1,4 @@
 /* Public front-end configuration — no secrets here. */
-/* Paste the deployed Cloudflare Worker URL after `wrangler deploy`. */
-window.CHATGPT_PROXY_URL = '';
+/* Leave empty to use the built-in keyless free model (Pollinations / GPT-6 Luna).
+   Optionally paste a Cloudflare Workers AI proxy URL to use your own free-model worker. */
+window.FREE_AI_PROXY_URL = '';

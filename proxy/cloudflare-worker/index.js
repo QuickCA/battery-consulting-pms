@@ -1,10 +1,9 @@
-/* ChatGPT intake proxy for battery-consulting-pms.
-   The OpenAI API key lives only in the Worker secret OPENAI_API_KEY.
-   Deployed URL is placed into the front-end config.js as CHATGPT_PROXY_URL. */
+/* Free-AI intake proxy for battery-consulting-pms.
+   Uses the Cloudflare Workers AI binding (no OpenAI key, no secrets in browser).
+   Free Workers plan includes 10,000 Neurons/day; default model is GLM-4.7-Flash. */
 
 const DEFAULT_ALLOWED_ORIGIN = 'https://quickca.github.io';
-const DEFAULT_MODEL = 'gpt-5.5';
-const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+const DEFAULT_MODEL = '@cf/zai-org/glm-4.7-flash';
 
 function corsHeaders(origin, env) {
   const allowed = String(env.ALLOWED_ORIGIN || DEFAULT_ALLOWED_ORIGIN)
@@ -27,6 +26,21 @@ function json(data, status, headers) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: h });
 }
 
+function extractContent(result) {
+  if (!result) return '';
+  if (typeof result === 'string') return result;
+  if (typeof result.response === 'string') return result.response;
+  if (typeof result.result === 'string') return result.result;
+  const choices = result.choices;
+  if (Array.isArray(choices) && choices.length) {
+    const first = choices[0];
+    if (first && first.message && typeof first.message.content === 'string') return first.message.content;
+    if (first && typeof first.text === 'string') return first.text;
+    if (typeof first === 'string') return first;
+  }
+  return '';
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
@@ -41,8 +55,8 @@ export default {
     if (!headers['Access-Control-Allow-Origin']) {
       return json({ error: 'origin_not_allowed' }, 403, headers);
     }
-    if (!env.OPENAI_API_KEY) {
-      return json({ error: 'missing_api_key' }, 500, headers);
+    if (!env.AI || typeof env.AI.run !== 'function') {
+      return json({ error: 'ai_binding_missing' }, 500, headers);
     }
 
     let payload;
@@ -60,51 +74,26 @@ export default {
 
     const model = typeof payload.model === 'string' && payload.model
       ? payload.model
-      : (env.OPENAI_MODEL || DEFAULT_MODEL);
+      : (env.OPENAI_MODEL || env.MODEL || DEFAULT_MODEL);
     const temperature = typeof payload.temperature === 'number'
       ? payload.temperature
       : 0.2;
 
     try {
-      const upstream = await fetch(OPENAI_URL, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer ' + env.OPENAI_API_KEY,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: model,
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user }
-          ],
-          temperature: temperature,
-          response_format: { type: 'json_object' }
-        })
+      const result = await env.AI.run(model, {
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user }
+        ],
+        temperature: temperature,
+        max_tokens: 4096,
+        response_format: { type: 'json_object' }
       });
 
-      const text = await upstream.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        data = { raw: text.slice(0, 1000) };
-      }
-
-      if (!upstream.ok) {
-        return json({
-          error: 'openai_error',
-          status: upstream.status,
-          message: data && data.error && data.error.message ? data.error.message : 'request_failed'
-        }, upstream.status, headers);
-      }
-
-      const content = data && data.choices && data.choices[0] &&
-        data.choices[0].message && data.choices[0].message.content;
+      const content = extractContent(result);
       if (!content) {
         return json({ error: 'empty_completion' }, 502, headers);
       }
-
       return json({ content: content }, 200, headers);
     } catch (e) {
       return json({
