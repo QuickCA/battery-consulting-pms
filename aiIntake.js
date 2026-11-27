@@ -207,6 +207,19 @@
     };
   }
 
+  /* Turn raw SDK/network errors into a small set of UI-ready reasons. */
+  function normalizeReason(err) {
+    var code = (err && (err.error && err.error.code || err.code)) || '';
+    var msg = (err && (err.error && err.error.message || err.message)) || '';
+    var both = (code + ' ' + msg).toLowerCase();
+    if (both.indexOf('origin') !== -1 && both.indexOf('not allowed') !== -1) return 'ORIGIN_NOT_ALLOWED';
+    if (both.indexOf('access_denied') !== -1) return 'ORIGIN_NOT_ALLOWED';
+    if (both.indexOf('network') !== -1 || both.indexOf('fetch') !== -1 || both.indexOf('gateway') !== -1) return 'NETWORK';
+    if (both.indexOf('sdk_not_loaded') !== -1) return 'SDK_NOT_LOADED';
+    if (both.indexOf('no_model') !== -1) return 'NO_MODEL';
+    return code || msg || 'UNKNOWN';
+  }
+
   /* Main entry: returns a promise resolving to items[] on success, or null on
      any failure (the caller then uses the local rule engine). */
   async function parse(text, role) {
@@ -239,7 +252,7 @@
       return items;
     } catch (err) {
       lastEngine = 'local';
-      lastReason = (err && (err.error && err.error.code || err.code || err.message)) || 'UNKNOWN';
+      lastReason = normalizeReason(err);
       return null;
     }
   }

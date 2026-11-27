@@ -1935,6 +1935,24 @@ function commitIntake() {
 }
 
 /* ---------------- events ---------------- */
+function aiFallbackToast(en, count, reason) {
+  const tail = (en ? ' items recognised by local rules' : ' 条内容，已按本地规则识别');
+  if (reason === 'ORIGIN_NOT_ALLOWED') {
+    return (en ? 'Cloud AI is not enabled for this domain — ' : '云端 AI 未授权当前域名 — ')
+      + count + tail + (en ? '. Use the WorkBuddy-hosted link for AI analysis.' : '；使用 WorkBuddy 托管链接可启用 AI 分析。');
+  }
+  if (reason === 'NETWORK') {
+    return (en ? 'Cloud AI unreachable — ' : '云端 AI 连接失败 — ') + count + tail;
+  }
+  if (reason === 'SDK_NOT_LOADED') {
+    return (en ? 'AI SDK not loaded — ' : 'AI 组件未加载 — ') + count + tail;
+  }
+  if (reason === 'NO_MODEL') {
+    return (en ? 'No AI model available — ' : '暂无可用 AI 模型 — ') + count + tail;
+  }
+  return (en ? 'AI unavailable (' : 'AI 不可用（') + (reason || 'UNKNOWN') + (en ? ') — ' : '）— ') + count + tail;
+}
+
 document.addEventListener('click', (e) => {
   if (e.target.closest('#btnTopIntake')) { location.hash = 'intake'; return; }
   if (currentPage !== 'intake') return;
@@ -1973,12 +1991,12 @@ document.addEventListener('click', (e) => {
         toast((en ? 'AI analysis: ' : 'AI 分析完成，识别 ') + found.length + (en ? ' items' : ' 条内容'));
       } else {
         const local = parseIntakeText(text, role);
-        toast((en ? 'AI unavailable — local rules: ' : 'AI 不可用，已按本地规则识别 ') + local.length + (en ? ' items' : ' 条内容'));
+        toast(aiFallbackToast(en, local.length, ai && ai.status ? ai.status().reason : ''));
       }
       route();
     }).catch(() => {
       const local = parseIntakeText(text, role);
-      toast((en ? 'AI unavailable — local rules: ' : 'AI 不可用，已按本地规则识别 ') + local.length + (en ? ' items' : ' 条内容'));
+      toast(aiFallbackToast(en, local.length, ai && ai.status ? ai.status().reason : ''));
       route();
     }).finally(() => {
       window._intakeBusy = false;
