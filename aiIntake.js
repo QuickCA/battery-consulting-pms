@@ -214,10 +214,45 @@
     var both = (code + ' ' + msg).toLowerCase();
     if (both.indexOf('origin') !== -1 && both.indexOf('not allowed') !== -1) return 'ORIGIN_NOT_ALLOWED';
     if (both.indexOf('access_denied') !== -1) return 'ORIGIN_NOT_ALLOWED';
+    if (both.indexOf('chatgpt_proxy') !== -1) return 'CHATGPT_PROXY';
     if (both.indexOf('network') !== -1 || both.indexOf('fetch') !== -1 || both.indexOf('gateway') !== -1) return 'NETWORK';
     if (both.indexOf('sdk_not_loaded') !== -1) return 'SDK_NOT_LOADED';
     if (both.indexOf('no_model') !== -1) return 'NO_MODEL';
     return code || msg || 'UNKNOWN';
+  }
+
+  /* Optional OpenAI ChatGPT proxy. The URL is public config; the API key stays
+     in the Cloudflare Worker secret and never reaches the browser. */
+  function chatGptProxyUrl() {
+    var u = (window.CHATGPT_PROXY_URL || '').trim();
+    if (!/^https:\/\//i.test(u)) return '';
+    return u.replace(/\/+$/, '');
+  }
+
+  async function callChatGptProxy(text, role, proxyUrl) {
+    var res = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system: systemPrompt(),
+        user: userPayload(text, role, owners()),
+        temperature: 0.2
+      })
+    });
+    var bodyText = '';
+    try { bodyText = await res.text(); } catch (e) { bodyText = ''; }
+    if (!res.ok) {
+      throw new Error('CHATGPT_PROXY_' + res.status + (bodyText ? ': ' + bodyText.slice(0, 160) : ''));
+    }
+    var data;
+    try { data = JSON.parse(bodyText); }
+    catch (e) { throw new Error('CHATGPT_PROXY_BAD_JSON'); }
+    var content = data && data.content;
+    if (!content && data && data.choices && data.choices[0] && data.choices[0].message) {
+      content = data.choices[0].message.content;
+    }
+    if (!content) throw new Error('CHATGPT_PROXY_EMPTY');
+    return content;
   }
 
   /* Main entry: returns a promise resolving to items[] on success, or null on
@@ -225,21 +260,26 @@
   async function parse(text, role) {
     lastReason = '';
     try {
-      var model = await getModel();
       var answer = '';
-      var stream = getCloud().llm.chat.completions.create({
-        model: model,
-        messages: [
-          { role: 'system', content: systemPrompt() },
-          { role: 'user', content: userPayload(text, role, owners()) }
-        ],
-        stream: true,
-        response_format: { type: 'json_object' },
-        temperature: 0.2
-      });
-      for await (var chunk of stream) {
-        var delta = chunk && chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
-        if (delta && delta.content) answer += delta.content;
+      var proxyUrl = chatGptProxyUrl();
+      if (proxyUrl) {
+        answer = await callChatGptProxy(text, role, proxyUrl);
+      } else {
+        var model = await getModel();
+        var stream = getCloud().llm.chat.completions.create({
+          model: model,
+          messages: [
+            { role: 'system', content: systemPrompt() },
+            { role: 'user', content: userPayload(text, role, owners()) }
+          ],
+          stream: true,
+          response_format: { type: 'json_object' },
+          temperature: 0.2
+        });
+        for await (var chunk of stream) {
+          var delta = chunk && chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
+          if (delta && delta.content) answer += delta.content;
+        }
       }
       var parsed;
       try { parsed = JSON.parse(stripFence(answer)); }
@@ -259,7 +299,7 @@
 
   window.AI_INTAKE = {
     parse: parse,
-    status: function () { return { engine: lastEngine, reason: lastReason, model: modelId, sdk: !!sdk() }; },
+    status: function () { return { engine: lastEngine, reason: lastReason, model: modelId, sdk: !!sdk(), provider: chatGptProxyUrl() ? 'chatgpt' : 'workbuddy' }; },
     resetModel: function () { modelId = null; }
   };
 })();

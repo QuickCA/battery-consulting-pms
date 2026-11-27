@@ -1,0 +1,7 @@
+name = "battery-consulting-pms-intake"
+main = "index.js"
+compatibility_date = "2026-11-27"
+
+[vars]
+ALLOWED_ORIGIN = "https://quickca.github.io"
+OPENAI_MODEL = "gpt-5.5"
